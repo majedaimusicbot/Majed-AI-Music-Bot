@@ -50,12 +50,12 @@ application = Application.builder().token(TOKEN).build()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
-        "✨ **به Deep House Farsi خوش آمدید**\n\n"
+        "✨ به Deep House Farsi خوش آمدید\n\n"
         "🎧 آرشیو اختصاصی آهنگ‌های ما\n"
         "برای دریافت آهنگ موردنظر، از گزینه‌های زیر استفاده کنید ❤️"
     )
     if update.message:
-        await update.message.reply_text(welcome_text, reply_markup=get_main_menu_markup(), parse_mode="Markdown")
+        await update.message.reply_text(welcome_text, reply_markup=get_main_menu_markup())
 
 async def add_song_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -65,9 +65,8 @@ async def add_song_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not context.args:
         await update.message.reply_text(
-            "⚠️ **راهنمای افزودن آهنگ:**\n"
-            "`/add نام آهنگ`\n(سپس فایل صوتی را ارسال کنید)",
-            parse_mode="Markdown"
+            "⚠️ راهنمای افزودن آهنگ:\n"
+            "/add نام آهنگ\n(سپس فایل صوتی را ارسال کنید)"
         )
         return
     
@@ -96,15 +95,13 @@ async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if matched:
                 await update.message.reply_text(
-                    f"🔎 **نتایج جستجو برای:** `{query_text}`\nتعداد یافت‌شده: {len(matched)}",
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode="Markdown"
+                    f"🔎 نتایج جستجو برای: {query_text}\nتعداد یافت‌شده: {len(matched)}",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
                 )
             else:
                 await update.message.reply_text(
                     f"❌ هیچ آهنگی با عبارت «{query_text}» یافت نشد.",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")]]),
-                    parse_mode="Markdown"
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")]])
                 )
         return
 
@@ -132,13 +129,11 @@ async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
             save_songs(SONGS)
             
             await update.message.reply_text(
-                f"🎉 **آهنگ جدید با موفقیت ذخیره شد!**\n\n🔹 عنوان: {title}\n🔹 شناسه: `{song_id}`",
-                parse_mode="Markdown"
+                f"🎉 آهنگ جدید با موفقیت ذخیره شد!\n\n🔹 عنوان: {title}\n🔹 شناسه: {song_id}"
             )
         else:
             await update.message.reply_text(
-                f"📁 **فایل‌آیدی دریافت شد:**\n`{file_id}`\n\nبرای ثبت نهایی بنویسید:\n`/add نام آهنگ`",
-                parse_mode="Markdown"
+                f"📁 فایل‌آیدی دریافت شد:\n{file_id}\n\nبرای ثبت نهایی بنویسید:\n/add نام آهنگ"
             )
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -153,11 +148,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "main_menu":
         context.user_data['waiting_for_search'] = False
         await query.message.edit_text(
-            "✨ **به Deep House Farsi خوش آمدید**\n\n"
+            "✨ به Deep House Farsi خوش آمدید\n\n"
             "🎧 آرشیو اختصاصی آهنگ‌های ما\n"
             "برای دریافت آهنگ موردنظر، از گزینه‌های زیر استفاده کنید ❤️",
-            reply_markup=get_main_menu_markup(),
-            parse_mode="Markdown"
+            reply_markup=get_main_menu_markup()
         )
 
     elif data.startswith("archive_"):
@@ -189,17 +183,16 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if total_songs == 0:
             text = "📂 آرشیو آهنگ‌ها در حال حاضر خالی است."
         else:
-            text = f"📂 **آرشیوی از بهترین‌های Deep House**\nصفحه {page + 1} از {max_page + 1}:"
+            text = f"📂 آرشیوی از بهترین‌های Deep House\nصفحه {page + 1} از {max_page + 1}:"
 
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
     elif data == "search_start":
         context.user_data['waiting_for_search'] = True
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")]])
         await query.message.edit_text(
-            "🔎 **جستجوی آهنگ**\n\nلطفاً نام یا بخشی از نام آهنگ موردنظر خود را ارسال کنید:",
-            reply_markup=keyboard,
-            parse_mode="Markdown"
+            "🔎 جستجوی آهنگ\n\nلطفاً نام یا بخشی از نام آهنگ موردنظر خود را ارسال کنید:",
+            reply_markup=keyboard
         )
 
     elif data == "latest_songs":
@@ -214,9 +207,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not latest:
             text = "🔥 هیچ آهنگ جدیدی یافت نشد."
         else:
-            text = "🔥 **جدیدترین آهنگ‌های اضافه شده:**"
+            text = "🔥 جدیدترین آهنگ‌های اضافه شده:"
 
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
     elif data == "noop":
         pass
@@ -233,17 +226,16 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await query.message.edit_text(
-                f"⚠️ **مرحله تایید سابسکرایب**\n\n"
-                f"برای دریافت موزیک **{song_info['title']}**، لطفاً مطمئن شوید که کانال یوتیوب ما را سابسکرایب کرده‌اید و سپس روی دکمه تایید بزنید.",
-                reply_markup=reply_markup,
-                parse_mode="Markdown"
+                f"⚠️ مرحله تایید سابسکرایب\n\n"
+                f"برای دریافت موزیک {song_info['title']}، لطفاً مطمئن شوید که کانال یوتیوب ما را سابسکرایب کرده‌اید و سپس روی دکمه تایید بزنید.",
+                reply_markup=reply_markup
             )
 
     elif data.startswith("verify_"):
         song_id = data.replace("verify_", "")
         if song_id in SONGS:
             song_info = SONGS[song_id]
-            await query.message.edit_text(f"🎉 سپاس از حمایت شما!\nدر حال ارسال فایل **{song_info['title']}**...")
+            await query.message.edit_text(f"🎉 سپاس از حمایت شما!\nدر حال ارسال فایل {song_info['title']}...")
             
             chat_id = query.message.chat_id
             file_id = song_info["file_id"]
@@ -251,12 +243,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             sent = False
             try:
-                await context.bot.send_audio(chat_id=chat_id, audio=file_id, caption=caption, parse_mode="Markdown")
+                await context.bot.send_audio(chat_id=chat_id, audio=file_id, caption=caption)
                 sent = True
             except Exception as e:
                 logging.error(f"Failed to send audio: {e}")
                 try:
-                    await context.bot.send_document(chat_id=chat_id, document=file_id, caption=caption, parse_mode="Markdown")
+                    await context.bot.send_document(chat_id=chat_id, document=file_id, caption=caption)
                     sent = True
                 except Exception as e2:
                     logging.error(f"Failed to send document: {e2}")
@@ -280,11 +272,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     SONGS = load_songs()
     
     total_songs = len(SONGS)
-    stats_text = f"📊 **گزارش آمار ربات**\n\n🎵 مجموع آهنگ‌ها: {total_songs}\n\n"
+    stats_text = f"📊 گزارش آمار ربات\n\n🎵 مجموع آهنگ‌ها: {total_songs}\n\n"
     for song_id, info in SONGS.items():
-        stats_text += f"• {info['title']}: 📥 `{info['downloads']}` دانلود\n"
+        stats_text += f"• {info['title']}: 📥 {info['downloads']} دانلود\n"
     
-    await update.message.reply_text(stats_text, parse_mode="Markdown")
+    await update.message.reply_text(stats_text)
 
 def get_main_menu_markup():
     return InlineKeyboardMarkup([
@@ -344,7 +336,8 @@ def webhook():
         json_data = request.get_json(force=True)
         update = Update.de_json(json_data, application.bot)
         if update and bot_loop:
-            bot_loop.call_soon_threadsafe(application.update_queue.put_nowait, update)
+            # ارسال مستقیم آپدیت به پردازشگر ربات در ترد اصلی
+            asyncio.run_coroutine_threadsafe(application.process_update(update), bot_loop)
     return "OK", 200
 
 if __name__ == "__main__":
