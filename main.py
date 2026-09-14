@@ -285,51 +285,38 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(stats_text)
 
-# ساخت اپلیکیشن تلگرام
-telegram_app = Application.builder().token(TOKEN).build()
-telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add_handler(CommandHandler("add", add_song_command))
-telegram_app.add_handler(CommandHandler("stats", stats))
-telegram_app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL | filters.TEXT & ~filters.COMMAND, handle_media))
-telegram_app.add_handler(CallbackQueryHandler(button))
+# تعریف ساختار واحد Application
+application = Application.builder().token(TOKEN).build()
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("add", add_song_command))
+application.add_handler(CommandHandler("stats", stats))
+application.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL | filters.TEXT & ~filters.COMMAND, handle_media))
+application.add_handler(CallbackQueryHandler(button))
 
-# Event Loop و Thread اختصاصی برای مدیریت چرخه حیات ربات به همراه سینک‌سازی راه‌اندازی
+# راه‌اندازی Event Loop و مدیریت اجرای چرخه‌حیات پایتون-تلگرام-بات
 bot_loop = asyncio.new_event_loop()
-app_is_ready = threading.Event()
 
 def run_bot_loop():
     asyncio.set_event_loop(bot_loop)
     
-    async def setup_app():
-        await telegram_app.initialize()
-        await telegram_app.start()
-        # فراخوانی استارت برای updater/processor داخلی پایتون-تلگرام-بات تا running روی True تنظیم شود
-        if hasattr(telegram_app, "updater") and telegram_app.updater:
-            await telegram_app.updater.start_polling() # صرفاً جهت راه‌اندازی مکانیسم داخلی اگر نیاز باشد ولی در اینجا Webhook داریم پس استارت پارت‌های مربوطه را دستی می‌زنیم:
+    async def setup_and_run():
+        await application.initialize()
+        await application.start()
         
-        # برای اطمینان از اینکه چرخه پردازش صف آپدیت‌ها در PTB v22 روشن شود:
-        await telegram_app.updater.start_webhook(listen="0.0.0.0", port=8443, webhook_url="") if False else None
+        # برای اینکه Application در وضعیت running = True قرار گیرد و updater داخلی (در صورت نیاز به پردازش صف) استارت بخورد:
+        if application.updater:
+            await application.updater.start_webhook(listen="localhost", port=0, webhook_url="") # جلوگیری از تداخل پورت ولی فعال‌سازی لوپ داخلی آپدیت‌ها
         
-        # در PTB v20+ برای اینکه Application کاملاً اکتیو و پردازشگر صف فعال شود باید پارت‌های زیر اجرا شوند:
-        await telegram_app.start()
-        
-        # تنظیم Webhook در تلگرام
         if RENDER_EXTERNAL_URL:
             webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/webhook"
-            await telegram_app.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+            await application.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
             logging.info(f"Webhook explicitly set to: {webhook_url}")
-            
-        app_is_ready.set()
 
-    bot_loop.run_until_complete(setup_app())
+    bot_loop.run_until_complete(setup_and_run())
     bot_loop.run_forever()
 
 bot_thread = threading.Thread(target=run_bot_loop, daemon=True)
 bot_thread.start()
-
-@app.before_first_request if hasattr(app, "before_first_request") else lambda: None
-def wait_for_bot():
-    app_is_ready.wait()
 
 @app.route("/", methods=["GET"])
 def index():
@@ -339,34 +326,23 @@ def index():
 def health():
     return {
         "status": "healthy",
-        "application_running": telegram_app.running,
+        "application_running": application.running,
         "bot_loop_running": bot_loop.is_running()
     }, 200
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    # تضمین اینکه Flask تا زمان آماده‌سازی کامل تلگرام درخواست را پردازش نکند
-    if not app_is_ready.is_set():
-        app_is_ready.wait(timeout=5)
-
     if request.headers.get("content-type") == "application/json":
         json_data = request.get_json(silent=True)
         
         if not isinstance(json_data, dict):
             return "Invalid JSON", 400
 
-        logging.info(f"Webhook received: {json_data}")
-
         try:
-            update = Update.de_json(json_data, telegram_app.bot)
-            logging.info(f"Update created: {update}")
-            
+            update = Update.de_json(json_data, application.bot)
             if update:
-                logging.info(f"Application running: {telegram_app.running}")
-                logging.info("Putting update into application.update_queue")
-                
                 bot_loop.call_soon_threadsafe(
-                    telegram_app.update_queue.put_nowait,
+                    application.update_queue.put_nowait,
                     update
                 )
         except Exception as e:
