@@ -2,6 +2,7 @@ import os
 import logging
 import json
 import asyncio
+import threading
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
@@ -48,16 +49,35 @@ def save_songs(songs):
 SONGS = load_songs()
 
 app = Flask(__name__)
+
 application = Application.builder().token(TOKEN).build()
 
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
+bot_loop = None
+bot_thread = None
+is_initialized = False
 
-async def init_application():
-    await application.initialize()
-    await application.start()
+def run_async_loop(loop):
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
 
-loop.run_until_complete(init_application())
+def init_bot_background():
+    global bot_loop, bot_thread, is_initialized
+    if is_initialized:
+        return
+    
+    bot_loop = asyncio.new_event_loop()
+    bot_thread = threading.Thread(target=run_async_loop, args=(bot_loop,), daemon=True)
+    bot_thread.start()
+    
+    async def _setup():
+        await application.initialize()
+        await application.start()
+
+    future = asyncio.run_coroutine_threadsafe(_setup(), bot_loop)
+    future.result()
+    is_initialized = True
+
+init_bot_background()
 
 async def start(update: Update, context):
     global SONGS
@@ -166,28 +186,30 @@ async def button(update: Update, context):
         song_id = data.replace("verify_", "")
         if song_id in SONGS:
             song_info = SONGS[song_id]
-            SONGS[song_id]["downloads"] += 1
-            save_songs(SONGS)
-            
             await query.message.reply_text(f"🎉 ممنون از حمایت شما! در حال ارسال {song_info['title']}...")
             
             chat_id = query.message.chat_id
             file_id = song_info["file_id"]
             caption = f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
             
+            send_tasks = [
+                ("send_audio", lambda: context.bot.send_audio(chat_id=chat_id, audio=file_id, caption=caption)),
+                ("send_document", lambda: context.bot.send_document(chat_id=chat_id, document=file_id, caption=caption))
+            ]
+            
             sent = False
-            for send_method in [
-                lambda: context.bot.send_audio(chat_id=chat_id, audio=file_id, caption=caption),
-                lambda: context.bot.send_document(chat_id=chat_id, document=file_id, caption=caption)
-            ]:
+            for method_name, send_func in send_tasks:
                 try:
-                    await send_method()
+                    await send_func()
                     sent = True
                     break
-                except Exception:
-                    continue
+                except Exception as e:
+                    logging.error(f"Failed to send file using {method_name}: {e}")
             
-            if not sent:
+            if sent:
+                SONGS[song_id]["downloads"] += 1
+                save_songs(SONGS)
+            else:
                 await query.message.reply_text("خطا در ارسال فایل. لطفاً به ادمین اطلاع دهید.")
 
 async def stats(update: Update, context):
@@ -221,7 +243,8 @@ def webhook():
     if request.method == "POST":
         json_data = request.get_json(force=True)
         update = Update.de_json(json_data, application.bot)
-        asyncio.run_coroutine_threadsafe(application.process_update(update), loop)
+        if update and bot_loop:
+            bot_loop.call_soon_threadsafe(application.update_queue.put_nowait, update)
     return "OK", 200
 
 if __name__ == "__main__":
