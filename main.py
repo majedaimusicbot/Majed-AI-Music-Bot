@@ -5,11 +5,7 @@ import logging
 
 from flask import Flask, request
 
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 
 from telegram.ext import (
     Application,
@@ -21,48 +17,51 @@ from telegram.ext import (
 )
 
 
-# =========================
-# تنظیمات
-# =========================
+# ==========================================
+# LOGGING
+# ==========================================
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
+
+# ==========================================
+# SETTINGS
+# ==========================================
+
 TOKEN = os.environ.get("BOT_TOKEN")
 
 if not TOKEN:
-    raise RuntimeError("BOT_TOKEN در Environment Variables تنظیم نشده است")
+    raise RuntimeError("BOT_TOKEN is not set")
 
 
 YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
 
 
-# =========================
-# آهنگ‌ها
-# =========================
+# ==========================================
+# SONGS
+# ==========================================
 
 SONGS = {
     "song_1": {
         "title": "🎵 بزن به سیم آخر",
-
-        # file_id آهنگ
         "file_id": "CQACAgQAAxkBAAMTaqfErP0p4AKJQHX5yGTqz06TmiIAAg8iAAIRZEBR7jMYGeE6jE9BA"
     }
 }
 
 
-# =========================
-# Flask
-# =========================
+# ==========================================
+# FLASK
+# ==========================================
 
 app = Flask(__name__)
 
 
-# =========================
-# Telegram Application
-# =========================
+# ==========================================
+# TELEGRAM APPLICATION
+# ==========================================
 
 application = (
     Application.builder()
@@ -72,16 +71,15 @@ application = (
 )
 
 
-# وضعیت کاربرانی که روی
-# «من سابسکرایب کردم» زده‌اند
+# کاربرانی که روی «من سابسکرایب کردم» زده‌اند
 verified_users = set()
 
 
-# =========================
-# ساخت منوی اصلی
-# =========================
+# ==========================================
+# KEYBOARD
+# ==========================================
 
-def main_keyboard(user_id):
+def get_keyboard(user_id):
 
     # اگر کاربر تأیید کرده باشد
     if user_id in verified_users:
@@ -96,6 +94,7 @@ def main_keyboard(user_id):
         ]
 
         for song_id, song_info in SONGS.items():
+
             keyboard.append([
                 InlineKeyboardButton(
                     f"🎵 دانلود {song_info['title']}",
@@ -104,6 +103,7 @@ def main_keyboard(user_id):
             ])
 
         return InlineKeyboardMarkup(keyboard)
+
 
     # حالت قفل
     keyboard = [
@@ -130,9 +130,9 @@ def main_keyboard(user_id):
     return InlineKeyboardMarkup(keyboard)
 
 
-# =========================
-# /start
-# =========================
+# ==========================================
+# START
+# ==========================================
 
 async def start(
     update: Update,
@@ -143,19 +143,19 @@ async def start(
 
     await update.message.reply_text(
         "🎵 به ربات دانلود آهنگ خوش آمدید!\n\n"
-        "برای فعال شدن بخش دانلود:\n\n"
-        "1️⃣ روی «❤️ سابسکرایب کانال یوتیوب» بزنید\n"
-        "2️⃣ وارد یوتیوب شوید و کانال را Subscribe کنید\n"
-        "3️⃣ به تلگرام برگردید\n"
-        "4️⃣ روی «✅ من سابسکرایب کردم» بزنید\n\n"
-        "بعد از آن بخش دانلود برای شما فعال می‌شود. 👇",
-        reply_markup=main_keyboard(user_id)
+        "برای فعال شدن دانلود:\n\n"
+        "1️⃣ روی دکمه «❤️ سابسکرایب کانال یوتیوب» بزنید.\n"
+        "2️⃣ وارد یوتیوب شوید و کانال را Subscribe کنید.\n"
+        "3️⃣ به تلگرام برگردید.\n"
+        "4️⃣ روی «✅ من سابسکرایب کردم» بزنید.\n\n"
+        "بعد از آن دانلود آهنگ برای شما فعال می‌شود. 👇",
+        reply_markup=get_keyboard(user_id)
     )
 
 
-# =========================
-# دکمه‌ها
-# =========================
+# ==========================================
+# BUTTON
+# ==========================================
 
 async def button(
     update: Update,
@@ -169,32 +169,33 @@ async def button(
     user_id = query.from_user.id
     data = query.data
 
-    # -------------------------
-    # دکمه من سابسکرایب کردم
-    # -------------------------
+
+    # ======================================
+    # VERIFY
+    # ======================================
 
     if data == "verify":
 
         verified_users.add(user_id)
 
-        await query.answer(
-            "✅ بخش دانلود فعال شد!",
-            show_alert=True
-        )
-
         await query.message.edit_text(
             "🎉 ممنون از حمایت شما!\n\n"
-            "عضویت شما ثبت شد.\n"
-            "حالا می‌توانید آهنگ موردنظر را دانلود کنید. 🎵",
-            reply_markup=main_keyboard(user_id)
+            "بخش دانلود برای شما فعال شد. 🎵\n"
+            "آهنگ موردنظر را انتخاب کنید:",
+            reply_markup=get_keyboard(user_id)
+        )
+
+        await query.answer(
+            "✅ دانلود فعال شد!",
+            show_alert=True
         )
 
         return
 
 
-    # -------------------------
-    # دکمه دانلود قفل
-    # -------------------------
+    # ======================================
+    # LOCKED
+    # ======================================
 
     if data == "locked":
 
@@ -206,36 +207,42 @@ async def button(
         return
 
 
-    # -------------------------
-    # دانلود آهنگ
-    # -------------------------
+    # ======================================
+    # DOWNLOAD
+    # ======================================
 
     if data.startswith("download:"):
 
-        # بررسی دوباره
+        # بررسی اینکه کاربر تأیید شده
         if user_id not in verified_users:
 
             await query.answer(
-                "🔒 ابتدا باید سابسکرایب کنید.",
+                "🔒 ابتدا باید کانال یوتیوب را Subscribe کنید.",
                 show_alert=True
             )
 
             return
 
+
         song_id = data.split(":", 1)[1]
 
+
         if song_id not in SONGS:
+
             await query.answer(
                 "❌ آهنگ پیدا نشد.",
                 show_alert=True
             )
+
             return
+
 
         song_info = SONGS[song_id]
 
         await query.message.reply_text(
             f"⏳ در حال ارسال {song_info['title']}..."
         )
+
 
         try:
 
@@ -248,21 +255,20 @@ async def button(
                 )
             )
 
-        except Exception as e:
+        except Exception:
 
-            logging.exception("خطا در ارسال آهنگ")
+            logging.exception("Error sending audio")
 
             await query.message.reply_text(
-                "❌ متأسفانه ارسال آهنگ با خطا مواجه شد.\n"
-                "لطفاً دوباره تلاش کنید."
+                "❌ خطا در ارسال آهنگ."
             )
 
         return
 
 
-# =========================
-# دریافت File ID
-# =========================
+# ==========================================
+# GET FILE ID
+# ==========================================
 
 async def get_file_id(
     update: Update,
@@ -274,33 +280,40 @@ async def get_file_id(
     if not msg:
         return
 
+
     file_id = None
     file_type = "نامشخص"
+
 
     if msg.audio:
 
         file_id = msg.audio.file_id
         file_type = "Audio"
 
+
     elif msg.voice:
 
         file_id = msg.voice.file_id
         file_type = "Voice"
+
 
     elif msg.video:
 
         file_id = msg.video.file_id
         file_type = "Video"
 
+
     elif msg.document:
 
         file_id = msg.document.file_id
         file_type = "Document"
 
+
     elif msg.video_note:
 
         file_id = msg.video_note.file_id
         file_type = "VideoNote"
+
 
     if file_id:
 
@@ -317,9 +330,9 @@ async def get_file_id(
         )
 
 
-# =========================
-# Handlerها
-# =========================
+# ==========================================
+# HANDLERS
+# ==========================================
 
 application.add_handler(
     CommandHandler("start", start)
@@ -337,9 +350,9 @@ application.add_handler(
 )
 
 
-# =========================
-# صفحه اصلی Render
-# =========================
+# ==========================================
+# HOME
+# ==========================================
 
 @app.route("/")
 def index():
@@ -347,9 +360,9 @@ def index():
     return "Bot is alive!", 200
 
 
-# =========================
-# Webhook
-# =========================
+# ==========================================
+# EVENT LOOP
+# ==========================================
 
 loop = asyncio.new_event_loop()
 
@@ -358,67 +371,87 @@ def bot_worker():
 
     asyncio.set_event_loop(loop)
 
+
     async def start_bot():
 
         await application.initialize()
 
         await application.start()
 
-        render_url = os.environ.get("RENDER_EXTERNAL_URL")
+
+        render_url = os.environ.get(
+            "RENDER_EXTERNAL_URL"
+        )
+
 
         if render_url:
 
-            webhook_url = f"{render_url}/webhook"
+            webhook_url = (
+                f"{render_url}/webhook"
+            )
 
             await application.bot.set_webhook(
                 url=webhook_url
             )
 
             logging.info(
-                f"Webhook set to: {webhook_url}"
+                f"Webhook set: {webhook_url}"
             )
 
         else:
 
             logging.warning(
-                "RENDER_EXTERNAL_URL تنظیم نشده است"
+                "RENDER_EXTERNAL_URL is not set"
             )
 
-    loop.run_until_complete(start_bot())
+
+    loop.run_until_complete(
+        start_bot()
+    )
 
     loop.run_forever()
 
 
+# اجرای Bot در Thread جداگانه
 threading.Thread(
     target=bot_worker,
     daemon=True
 ).start()
 
 
-# =========================
-# دریافت Update از Telegram
-# =========================
+# ==========================================
+# WEBHOOK
+# ==========================================
 
-@app.route("/webhook", methods=["POST"])
+@app.route(
+    "/webhook",
+    methods=["POST"]
+)
 def webhook():
 
     try:
 
-        json_data = request.get_json(force=True)
+        json_data = request.get_json(
+            force=True
+        )
+
 
         update = Update.de_json(
             json_data,
             application.bot
         )
 
+
         asyncio.run_coroutine_threadsafe(
             application.update_queue.put(update),
             loop
         )
 
+
         return "OK", 200
 
-    except Exception as e:
+
+    except Exception:
 
         logging.exception(
             "Webhook error"
@@ -427,15 +460,19 @@ def webhook():
         return "ERROR", 500
 
 
-# =========================
-# اجرای Flask
-# =========================
+# ==========================================
+# RUN
+# ==========================================
 
 if __name__ == "__main__":
 
     port = int(
-        os.environ.get("PORT", 10000)
+        os.environ.get(
+            "PORT",
+            10000
+        )
     )
+
 
     app.run(
         host="0.0.0.0",
