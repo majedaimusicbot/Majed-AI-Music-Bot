@@ -39,12 +39,18 @@ def index():
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
-    update = Update.de_json(request.get_json(force=True), application.bot)
-    application.update_queue.put(update)
+    json_data = request.get_json(force=True)
+    update = Update.de_json(json_data, application.bot)
+    
+    # اجرای صحیح پردازش آپدیت در لوپ رویداد ربات
+    async def process():
+        await application.initialize()
+        await application.process_update(update)
+    
+    import asyncio
+    asyncio.run(process())
     return "OK", 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    application.initialize()
-    application.start()
     app.run(host="0.0.0.0", port=port)
