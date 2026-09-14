@@ -1,26 +1,35 @@
 import os
 import logging
 import json
+import asyncio
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 
-TOKEN = "8836665873:AAE7yM9_qhV6xgAv5VfnU3LDm-twXP910Ak"
-YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
+TOKEN = os.environ.get("BOT_TOKEN")
+if not TOKEN:
+    raise ValueError("خطا: متغیر محیطی BOT_TOKEN تنظیم نشده است.")
 
-# فایل برای ذخیره دائمی آهنگ‌ها روی هاست (تا با ری‌استارت پاک نشوند)
+admin_id_env = os.environ.get("ADMIN_ID")
+if not admin_id_env:
+    raise ValueError("خطا: متغیر محیطی ADMIN_ID تنظیم نشده است.")
+ADMIN_ID = int(admin_id_env)
+
+YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
 DB_FILE = "songs_db.json"
 
 def load_songs():
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    # آهنگ پیش‌فرض اولیه
+                content = f.read().strip()
+                if not content:
+                    return {}
+                return json.loads(content)
+        except Exception as e:
+            logging.error(f"Error reading {DB_FILE}: {e}. Returning default database.")
     return {
         "song_1": {
             "title": "🎵 بزن به سیم آخر",
@@ -30,13 +39,25 @@ def load_songs():
     }
 
 def save_songs(songs):
-    with open(DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(songs, f, ensure_ascii=False, indent=4)
+    try:
+        with open(DB_FILE, "w", encoding="utf-8") as f:
+            json.dump(songs, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        logging.error(f"Error saving to {DB_FILE}: {e}")
 
 SONGS = load_songs()
 
 app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
+
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+async def init_application():
+    await application.initialize()
+    await application.start()
+
+loop.run_until_complete(init_application())
 
 async def start(update: Update, context):
     global SONGS
@@ -46,33 +67,41 @@ async def start(update: Update, context):
         [InlineKeyboardButton("❤️ سابسکرایب در یوتیوب", url=YOUTUBE_URL)]
     ]
     for song_id, song_info in SONGS.items():
-        keyboard.append([InlineKeyboardButton(f"✅ دریافت آهنگ: {song_info['title']}", callback_data=song_id)])
+        keyboard.append([InlineKeyboardButton(f"✅ دریافت آهنگ: {song_info['title']}", callback_data=f"select_{song_id}")])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     welcome_text = (
         "✨ **به ربات اختصاصی کانال Deep House Farsi خوش آمدید!**\n\n"
         "🎧 برای دریافت فایل صوتی آهنگ‌ها:\n"
         "۱. ابتدا روی دکمه‌ی بالا بزنید و کانال یوتیوب ما را سابسکرایب کنید.\n"
-        "۲. سپس روی دکمه‌ی دریافت آهنگ بزنید تا پیام بررسی برای شما ارسال شود.\n\n"
+        "۲. سپس روی دکمه‌ی دریافت آهنگ دلخواه بزنید.\n\n"
         "🔥 از حمایت شما سپاسگزاریم!"
     )
     await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
 
 async def add_song_command(update: Update, context):
-    # دستور برای اضافه کردن: /add نام آهنگ
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("شما دسترسی مدیریتی ندارید.")
+        return
+
     if not context.args:
         await update.message.reply_text(
-            "⚠️ برای اضافه کردن آهنگ جدید، دستور را به این شکل بفرستید:\n"
-            "`/add نام آهنگ`\n(و فایل صوتی را همراه آن یا به صورت ریپلای بفرستید)",
+            "⚠️ روش استفاده:\n"
+            "`/add نام آهنگ`\n(و فایل صوتی را بفرستید)",
             parse_mode="Markdown"
         )
         return
     
     song_title = "🎵 " + " ".join(context.args)
     context.user_data['pending_title'] = song_title
-    await update.message.reply_text(f"✅ عنوان «{song_title}» ثبت شد.\nحالا فایل صوتی این آهنگ را از گوشیتان به ربات بفرستید.")
+    await update.message.reply_text(f"✅ عنوان «{song_title}» ثبت شد.\nحالا فایل صوتی مربوطه را بفرستید.")
 
 async def handle_media(update: Update, context):
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
+        return
+
     global SONGS
     msg = update.message
     file_id = None
@@ -85,9 +114,9 @@ async def handle_media(update: Update, context):
         file_id = msg.document.file_id
 
     if file_id:
-        # اگر عنوانی از قبل با دستور /add ثبت شده باشد، آهنگ جدید را اضافه می‌کند
         if 'pending_title' in context.user_data:
             title = context.user_data.pop('pending_title')
+            SONGS = load_songs()
             song_id = f"song_{len(SONGS) + 1}"
             
             SONGS[song_id] = {
@@ -97,12 +126,13 @@ async def handle_media(update: Update, context):
             }
             save_songs(SONGS)
             
-            await update.message.reply_text(f"🎉 آهنگ جدید با موفقیت به ربات اضافه شد و به منوی کاربران رفت!\n\nعنوان: {title}\nکد: `{song_id}`", parse_mode="Markdown")
-        else:
-            # اگر دستوری نزده بود، فقط فایل‌آیدی را می‌دهد که کارتان راحت باشد
             await update.message.reply_text(
-                f"📁 فایل‌آیدی:\n`{file_id}`\n\n"
-                f"برای اضافه کردن این آهنگ به منوی ربات، کافی است بنویسید:\n`/add نام آهنگ`",
+                f"🎉 آهنگ جدید با موفقیت اضافه شد!\n\nعنوان: {title}\nکد: `{song_id}`",
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                f"📁 فایل‌آیدی:\n`{file_id}`\n\nبرای افزودن به لیست بنویسید:\n`/add نام آهنگ`",
                 parse_mode="Markdown"
             )
 
@@ -115,23 +145,25 @@ async def button(update: Update, context):
     
     data = query.data
     
-    if data in SONGS:
-        song_info = SONGS[data]
-        keyboard = [
-            [InlineKeyboardButton("❤️ برو به کانال و سابسکرایب کن", url=YOUTUBE_URL)],
-            [InlineKeyboardButton("✅ سابسکرایب کردم، دریافت آهنگ", callback_data=f"download_{data}")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.message.reply_text(
-            f"⚠️ **توجه:** شما هنوز کانال یوتیوب ما را سابسکرایب نکرده‌اید!\n\n"
-            f"برای دریافت آهنگ **{song_info['title']}**، ابتدا روی لینک زیر بزنید و سابسکرایب کنید، سپس روی دکمه‌ی تأیید بزنید.",
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
-        )
+    if data.startswith("select_"):
+        song_id = data.replace("select_", "")
+        if song_id in SONGS:
+            song_info = SONGS[song_id]
+            keyboard = [
+                [InlineKeyboardButton("❤️ برو به کانال و سابسکرایب کن", url=YOUTUBE_URL)],
+                [InlineKeyboardButton("✅ سابسکرایب کردم، دریافت آهنگ", callback_data=f"verify_{song_id}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.message.reply_text(
+                f"⚠️ **توجه:** شما هنوز مرحله سابسکرایب را تأیید نکرده‌اید!\n\n"
+                f"برای دریافت آهنگ **{song_info['title']}**، ابتدا کانال را سابسکرایب کنید و سپس روی دکمه‌ی تأیید زیر بزنید.",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
 
-    elif data.startswith("download_"):
-        song_id = data.replace("download_", "")
+    elif data.startswith("verify_"):
+        song_id = data.replace("verify_", "")
         if song_id in SONGS:
             song_info = SONGS[song_id]
             SONGS[song_id]["downloads"] += 1
@@ -156,9 +188,14 @@ async def button(update: Update, context):
                     continue
             
             if not sent:
-                await query.message.reply_text("خطا در ارسال فایل. لطفاً دوباره تلاش کنید.")
+                await query.message.reply_text("خطا در ارسال فایل. لطفاً به ادمین اطلاع دهید.")
 
 async def stats(update: Update, context):
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("شما دسترسی مدیریتی ندارید.")
+        return
+
     global SONGS
     SONGS = load_songs()
     
@@ -181,17 +218,11 @@ def index():
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
-    json_data = request.get_json(force=True)
-    update = Update.de_json(json_data, application.bot)
-    
-    async def process():
-        await application.initialize()
-        await application.process_update(update)
-    
-    import asyncio
-    asyncio.run(process())
+    if request.method == "POST":
+        json_data = request.get_json(force=True)
+        update = Update.de_json(json_data, application.bot)
+        asyncio.run_coroutine_threadsafe(application.process_update(update), loop)
     return "OK", 200
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
