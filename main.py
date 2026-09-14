@@ -296,7 +296,6 @@ telegram_app.add_handler(CallbackQueryHandler(button))
 with app.app_context():
     if RENDER_EXTERNAL_URL:
         webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/webhook"
-        # تنظیم وب‌هوک به صورت همگام یا از طریق لوپ رویداد
         try:
             loop = asyncio.get_event_loop()
         except RuntimeError:
@@ -316,8 +315,8 @@ def index():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     if request.headers.get("content-type") == "application/json":
-        json_string = request.get_data().decode("utf-8")
-        update = Update.de_json(json_string, telegram_app.bot)
+        json_data = request.get_json(force=True)
+        update = Update.de_json(json_data, telegram_app.bot)
         
         loop = asyncio.get_event_loop()
         if loop.is_running():
