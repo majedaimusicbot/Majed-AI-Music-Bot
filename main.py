@@ -1,49 +1,50 @@
 import os
 import logging
+from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 
 TOKEN = "8836665873:AAE7yM9_qhV6xgAv5VfnU3LDm-twXP910Ak"
 YOUTUBE_URL = "https://www.youtube.com/@MajedAIMusic"
-AUDIO_URL = "https://t.me/c/..."
+AUDIO_URL = "https://t.me/..."
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+app = Flask(__name__)
+application = Application.builder().token(TOKEN).build()
+
+async def start(update: Update, context):
     keyboard = [
-        [InlineKeyboardButton("🔴 سابسکرایب در یوتیوب", url=YOUTUBE_URL)],
-        [InlineKeyboardButton("✅ دریافت آهنگ", callback_data="get_audio")]
+        [InlineKeyboardButton("❤️ سابسکرایب در یوتیوب", url=YOUTUBE_URL)],
+        [InlineKeyboardButton("🎵 دریافت آهنگ", callback_data="get_audio")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "سلام! 🎵\nبرای دریافت فایل صوتی آهنگ، ابتدا کانال یوتیوب ما را سابسکرایب کنید و سپس روی دکمه‌ی «دریافت آهنگ» بزنید.",
+        "برای دریافت فایل صوتی آهنگ، ابتدا کانال یوتیوب ما را سابسکرایب کنید و سپس روی دکمه «دریافت آهنگ» بزنید.",
         reply_markup=reply_markup
     )
 
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button(update: Update, context):
     query = update.callback_query
     await query.answer()
-    
     if query.data == "get_audio":
-        await query.message.reply_text(f"ممنون از حمایت شما! ❤️\nاین هم لینک دانلود آهنگ:\n{AUDIO_URL}")
+        await query.message.reply_text(AUDIO_URL)
 
-def main():
-    application = Application.builder().token(TOKEN).build()
-    
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button))
-    
-    port = int(os.environ.get("PORT", 8080))
-    webhook_url = os.environ.get("RENDER_EXTERNAL_URL")
-    
-    if webhook_url:
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=port,
-            webhook_url=f"{webhook_url}/{TOKEN}"
-        )
-    else:
-        application.run_polling()
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CallbackQueryHandler(button))
+
+@app.route("/")
+def index():
+    return "Bot is alive!", 200
+
+@app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), application.bot)
+    application.update_queue.put(update)
+    return "OK", 200
 
 if __name__ == "__main__":
-    main()
+    port = int(os.environ.get("PORT", 10000))
+    application.initialize()
+    application.start()
+    app.run(host="0.0.0.0", port=port)
