@@ -87,21 +87,16 @@ def init_bot_background():
 init_bot_background()
 
 async def start(update: Update, context):
-    global SONGS
-    SONGS = load_songs()
-    
     keyboard = [
-        [InlineKeyboardButton("❤️ سابسکرایب در کانال یوتیوب", url=YOUTUBE_URL)]
+        [InlineKeyboardButton("❤️ سابسکرایب در کانال یوتیوب", url=YOUTUBE_URL)],
+        [InlineKeyboardButton("🎵 دریافت آهنگ", callback_data="browse_songs")]
     ]
-    for song_id, song_info in SONGS.items():
-        keyboard.append([InlineKeyboardButton(f"🎧 دریافت آهنگ: {song_info['title']}", callback_data=f"select_{song_id}")])
-
     reply_markup = InlineKeyboardMarkup(keyboard)
     welcome_text = (
         "✨ **به ربات رسمی کانال Deep House Farsi خوش آمدید!**\n\n"
         "🎧 جهت دریافت فایل‌های صوتی:\n"
         "1️⃣ ابتدا روی دکمه‌ی بالا کلیک کرده و کانال یوتیوب ما را سابسکرایب کنید.\n"
-        "2️⃣ سپس آهنگ مورد نظر خود را از لیست زیر انتخاب کنید.\n\n"
+        "2️⃣ سپس روی دکمه‌ی **دریافت آهنگ** کلیک کنید تا آرشیو موزیک‌ها را مشاهده فرمایید.\n\n"
         "🔥 از حمایت و همراهی شما سپاسگزاریم!"
     )
     if update.message:
@@ -175,14 +170,26 @@ async def button(update: Update, context):
     
     if data == "main_menu":
         keyboard = [
-            [InlineKeyboardButton("❤️ سابسکرایب در کانال یوتیوب", url=YOUTUBE_URL)]
+            [InlineKeyboardButton("❤️ سابسکرایب در کانال یوتیوب", url=YOUTUBE_URL)],
+            [InlineKeyboardButton("🎵 دریافت آهنگ", callback_data="browse_songs")]
         ]
-        for song_id, song_info in SONGS.items():
-            keyboard.append([InlineKeyboardButton(f"🎧 دریافت آهنگ: {song_info['title']}", callback_data=f"select_{song_id}")])
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.message.edit_text(
-            "✨ **منوی اصلی ربات Deep House Farsi**\n\nآهنگ مورد نظر خود را از لیست زیر انتخاب کنید:",
+            "✨ **منوی اصلی ربات Deep House Farsi**\n\nاز طریق دکمه‌ی زیر می‌توانید به آرشیو آهنگ‌ها دسترسی داشته باشید:",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+
+    elif data == "browse_songs":
+        keyboard = []
+        for song_id, song_info in SONGS.items():
+            keyboard.append([InlineKeyboardButton(f"🎧 {song_info['title']}", callback_data=f"select_{song_id}")])
+        keyboard.append([InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.message.edit_text(
+            "📂 **لیست آهنگ‌های موجود:**\n\nآهنگ مورد نظر خود را از لیست زیر انتخاب کنید:",
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
@@ -194,7 +201,7 @@ async def button(update: Update, context):
             keyboard = [
                 [InlineKeyboardButton("❤️ سابسکرایب در یوتیوب", url=YOUTUBE_URL)],
                 [InlineKeyboardButton("✅ سابسکرایب کردم، دریافت فایل", callback_data=f"verify_{song_id}")],
-                [InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")]
+                [InlineKeyboardButton("🔙 بازگشت به لیست آهنگ‌ها", callback_data="browse_songs")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -231,7 +238,6 @@ async def button(update: Update, context):
                 SONGS[song_id]["downloads"] += 1
                 save_songs(SONGS)
                 
-                # ارسال دکمه بازگشت به منو
                 back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")]])
                 await context.bot.send_message(chat_id=chat_id, text="👇 برای دریافت سایر آهنگ‌ها از منو استفاده کنید:", reply_markup=back_keyboard)
             else:
