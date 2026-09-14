@@ -285,7 +285,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(stats_text)
 
-# راه‌اندازی اپلیکیشن تلگرام
+# ساخت اپلیکیشن تلگرام
 telegram_app = Application.builder().token(TOKEN).build()
 telegram_app.add_handler(CommandHandler("start", start))
 telegram_app.add_handler(CommandHandler("add", add_song_command))
@@ -293,7 +293,7 @@ telegram_app.add_handler(CommandHandler("stats", stats))
 telegram_app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL | filters.TEXT & ~filters.COMMAND, handle_media))
 telegram_app.add_handler(CallbackQueryHandler(button))
 
-# Event Loop و Thread اختصاصی برای اجرای ربات
+# راه‌اندازی Event Loop در یک Thread جداگانه برای هندل کردن پردازش‌ها بدون تداخل با Flask
 bot_loop = asyncio.new_event_loop()
 
 def run_bot_loop():
@@ -304,8 +304,8 @@ def run_bot_loop():
         await telegram_app.start()
         if RENDER_EXTERNAL_URL:
             webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/webhook"
-            await telegram_app.bot.set_webhook(url=webhook_url)
-            logging.info(f"Webhook set to: {webhook_url}")
+            await telegram_app.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+            logging.info(f"Webhook explicitly set to: {webhook_url}")
 
     bot_loop.run_until_complete(setup_app())
     bot_loop.run_forever()
@@ -320,21 +320,22 @@ def index():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     if request.headers.get("content-type") == "application/json":
-        raw_data = request.get_data(as_text=True)
-        try:
-            json_data = json.loads(raw_data)
-        except Exception:
-            return "Invalid JSON", 400
-
+        json_data = request.get_json(silent=True)
+        
         if not isinstance(json_data, dict):
             return "Invalid JSON", 400
 
-        update = Update.de_json(json_data, telegram_app.bot)
-        
-        bot_loop.call_soon_threadsafe(
-            telegram_app.update_queue.put_nowait,
-            update
-        )
+        try:
+            update = Update.de_json(json_data, telegram_app.bot)
+            if update:
+                bot_loop.call_soon_threadsafe(
+                    telegram_app.update_queue.put_nowait,
+                    update
+                )
+        except Exception as e:
+            logging.error(f"Error processing update: {e}")
+            return "Error", 500
+            
         return "OK", 200
     return "Invalid request", 403
 
