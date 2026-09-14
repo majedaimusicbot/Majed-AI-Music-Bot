@@ -293,7 +293,7 @@ telegram_app.add_handler(CommandHandler("stats", stats))
 telegram_app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL | filters.TEXT & ~filters.COMMAND, handle_media))
 telegram_app.add_handler(CallbackQueryHandler(button))
 
-# راه‌اندازی Event Loop در یک Thread جداگانه برای هندل کردن پردازش‌ها بدون تداخل با Flask
+# Event Loop و Thread اختصاصی برای مدیریت چرخه حیات ربات
 bot_loop = asyncio.new_event_loop()
 
 def run_bot_loop():
@@ -317,6 +317,14 @@ bot_thread.start()
 def index():
     return "Bot is running!", 200
 
+@app.route("/health", methods=["GET"])
+def health():
+    return {
+        "status": "healthy",
+        "application_running": telegram_app.running,
+        "bot_loop_running": bot_loop.is_running()
+    }, 200
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     if request.headers.get("content-type") == "application/json":
@@ -325,9 +333,16 @@ def webhook():
         if not isinstance(json_data, dict):
             return "Invalid JSON", 400
 
+        logging.info(f"Webhook received: {json_data}")
+
         try:
             update = Update.de_json(json_data, telegram_app.bot)
+            logging.info(f"Update created: {update}")
+            
             if update:
+                logging.info(f"Application running: {telegram_app.running}")
+                logging.info("Putting update into application.update_queue")
+                
                 bot_loop.call_soon_threadsafe(
                     telegram_app.update_queue.put_nowait,
                     update
