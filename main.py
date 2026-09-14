@@ -2,15 +2,12 @@ import os
 import logging
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 
 TOKEN = "8836665873:AAE7yM9_qhV6xgAv5VfnU3LDm-twXP910Ak"
 YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
-
-# اینجا فایل‌آیدی (file_id) موزیک خود را قرار دهید
-AUDIO_FILE_ID = "BAACAgQAAxkBAAE..." 
 
 app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
@@ -26,23 +23,26 @@ async def start(update: Update, context):
         reply_markup=reply_markup
     )
 
+# این بخش کدهایی است که وقتی فایلی به ربات فوروارد کنید، File ID آن را به شما نشان می‌دهد
+async def get_file_id(update: Update, context):
+    if update.message.audio:
+        file_id = update.message.audio.file_id
+        await update.message.reply_text(f"📁 فایل‌آیدی این آهنگ:\n`{file_id}`", parse_mode="Markdown")
+    elif update.message.voice:
+        file_id = update.message.voice.file_id
+        await update.message.reply_text(f"📁 فایل‌آیدی این ویس/موزیک:\n`{file_id}`", parse_mode="Markdown")
+    else:
+        await update.message.reply_text("لطفاً یک فایل صوتی یا موزیک به ربات فوروارد کنید.")
+
 async def button(update: Update, context):
     query = update.callback_query
     await query.answer()
     
     if query.data == "get_song":
-        await query.message.reply_text("از حمایت شما سپاسگزاریم! 🎉 در حال ارسال آهنگ...")
-        try:
-            await context.bot.send_audio(
-                chat_id=query.message.chat_id,
-                audio=AUDIO_FILE_ID,
-                caption="🎵 موزیک جدید شما از کانال Deep House Farsi"
-            )
-        except Exception as e:
-            logging.error(f"Error sending audio: {e}")
-            await query.message.reply_text("خطا در ارسال فایل. لطفاً فایل‌آیدی را بررسی کنید.")
+        await query.message.reply_text("از حمایت شما سپاسگزاریم! 🎉 اینجا می‌توانید بعداً موزیک را دریافت کنید.")
 
 application.add_handler(CommandHandler("start", start))
+application.add_handler(MessageHandler(filters.AUDIO | filters.VOICE, get_file_id))
 application.add_handler(CallbackQueryHandler(button))
 
 @app.route("/")
