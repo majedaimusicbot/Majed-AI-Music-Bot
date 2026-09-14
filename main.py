@@ -64,7 +64,7 @@ except ValueError:
 
 
 # =========================================================
-# YOUTUBE CONFIG
+# YOUTUBE
 # =========================================================
 
 YOUTUBE_URL = (
@@ -109,6 +109,7 @@ def load_songs():
         return {}
 
     try:
+
         with open(
             DB_FILE,
             "r",
@@ -128,6 +129,7 @@ def load_songs():
             return {}
 
     except Exception:
+
         logger.exception(
             "Could not read songs_db.json"
         )
@@ -163,6 +165,7 @@ def save_songs(songs):
         )
 
     except Exception:
+
         logger.exception(
             "Could not save songs_db.json"
         )
@@ -184,7 +187,7 @@ telegram_app = (
 
 
 # =========================================================
-# STATISTICS HELPERS
+# STATISTICS
 # =========================================================
 
 def get_total_downloads():
@@ -222,58 +225,6 @@ def get_total_songs():
 
 
 # =========================================================
-# YOUTUBE SUPPORT MENU
-# =========================================================
-
-def youtube_support_menu():
-
-    return InlineKeyboardMarkup([
-
-        [
-            InlineKeyboardButton(
-                "🔴 سابسکرایب در یوتیوب ❤️",
-                url=YOUTUBE_URL,
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "✅ سابسکرایب کردم — ادامه",
-                callback_data="youtube_confirm",
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "🔙 منوی اصلی",
-                callback_data="main_menu",
-            )
-        ],
-
-    ])
-
-
-def youtube_support_text():
-
-    return (
-        "❤️ حمایت از Majed AI Music\n\n"
-
-        "اگر از آهنگ‌ها و موسیقی‌های ما خوشت میاد، "
-        "با یک سابسکرایب ساده در یوتیوب از ما حمایت کن. 🎧\n\n"
-
-        "🔥 حمایت شما باعث میشه با انگیزه بیشتری "
-        "آهنگ‌های جدید فارسی تولید کنیم.\n\n"
-
-        "🎵 موزیک‌های جدید\n"
-        "🎧 تولید محتوای بیشتر\n"
-        "❤️ حمایت مستقیم از ما\n\n"
-
-        "👇 ابتدا روی دکمه زیر بزن و کانال ما را Subscribe کن.\n"
-        "بعد به ربات برگرد و روی «سابسکرایب کردم — ادامه» بزن."
-    )
-
-
-# =========================================================
 # MAIN MENU
 # =========================================================
 
@@ -284,10 +235,11 @@ def main_menu():
 
     return InlineKeyboardMarkup([
 
+        # مستقیم به یوتیوب
         [
             InlineKeyboardButton(
                 "🔴 حمایت از ما در یوتیوب ❤️",
-                callback_data="youtube_support",
+                url=YOUTUBE_URL,
             )
         ],
 
@@ -339,10 +291,102 @@ def main_menu_text():
         f"🎼 تعداد آهنگ‌ها: {total_songs}\n"
         f"📥 مجموع دانلودها: {total_downloads}\n\n"
 
-        "❤️ اگر دوست داری از ما حمایت کنی، "
-        "روی «حمایت از ما در یوتیوب» بزن.\n\n"
+        "❤️ برای دریافت آهنگ، وارد آرشیو شوید.\n"
+        "اگر دوست داری از ما حمایت کنی، "
+        "می‌تونی کانال یوتیوب ما رو Subscribe کنی."
+    )
 
-        "👇 برای دریافت آهنگ موردنظر یکی از گزینه‌ها را انتخاب کن."
+
+# =========================================================
+# YOUTUBE SUBSCRIBE GATE
+# =========================================================
+
+def youtube_gate_keyboard(song_id):
+
+    return InlineKeyboardMarkup([
+
+        [
+            InlineKeyboardButton(
+                "🔴 سابسکرایب در یوتیوب ❤️",
+                url=YOUTUBE_URL,
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "✅ سابسکرایب کردم — دریافت آهنگ",
+                callback_data=f"youtube_confirm_{song_id}",
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "🔙 انتخاب آهنگ دیگر",
+                callback_data="archive_0",
+            )
+        ],
+
+    ])
+
+
+def youtube_gate_text(song):
+
+    return (
+        "❤️ یک حمایت کوچک برای ادامه\n\n"
+
+        f"🎵 {song['title']}\n\n"
+
+        "اگر از موسیقی‌های Majed AI Music خوشت میاد، "
+        "لطفاً با یک Subscribe در یوتیوب از ما حمایت کن. 🎧\n\n"
+
+        "🔥 حمایت تو کمک می‌کنه موزیک‌های جدید بیشتری "
+        "تولید کنیم.\n\n"
+
+        "👇 اول روی دکمه قرمز بزن و در یوتیوب Subscribe کن.\n"
+        "بعد برگرد و روی «سابسکرایب کردم — دریافت آهنگ» بزن."
+    )
+
+
+def youtube_warning_keyboard(song_id):
+
+    return InlineKeyboardMarkup([
+
+        [
+            InlineKeyboardButton(
+                "🔴 دوباره رفتن به یوتیوب ❤️",
+                url=YOUTUBE_URL,
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "✅ سابسکرایب کردم — دریافت آهنگ",
+                callback_data=f"youtube_confirm_{song_id}",
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "🔙 انتخاب آهنگ دیگر",
+                callback_data="archive_0",
+            )
+        ],
+
+    ])
+
+
+def youtube_warning_text(song):
+
+    return (
+        "⚠️ هنوز یک مرحله باقی مانده!\n\n"
+
+        f"🎵 آهنگ: {song['title']}\n\n"
+
+        "برای دریافت این آهنگ، لطفاً ابتدا در یوتیوب "
+        "کانال Majed AI Music را Subscribe کن ❤️\n\n"
+
+        "اگر هنوز Subscribe نکردی، روی دکمه زیر بزن.\n"
+        "بعد دوباره «سابسکرایب کردم — دریافت آهنگ» را بزن."
     )
 
 
@@ -410,14 +454,12 @@ def archive_menu(page=0):
             "📂 آرشیو آهنگ‌ها در حال حاضر خالی است.",
 
             InlineKeyboardMarkup([
-
                 [
                     InlineKeyboardButton(
                         "🔙 منوی اصلی",
                         callback_data="main_menu",
                     )
                 ]
-
             ]),
         )
 
@@ -542,8 +584,11 @@ async def start(
     context.user_data["waiting_for_search"] = False
 
     await update.message.reply_text(
+
         main_menu_text(),
+
         reply_markup=main_menu(),
+
     )
 
 
@@ -575,6 +620,7 @@ async def admin_command(
         "از گزینه‌های زیر استفاده کنید:",
 
         reply_markup=admin_menu(),
+
     )
 
 
@@ -658,11 +704,6 @@ async def cancel_command(
 
     context.user_data.pop(
         "waiting_for_search",
-        None,
-    )
-
-    context.user_data.pop(
-        "waiting_for_delete",
         None,
     )
 
@@ -1160,6 +1201,209 @@ async def handle_message(
 
 
 # =========================================================
+# SEND SONG
+# =========================================================
+
+async def send_song(
+    query,
+    context,
+    song_id,
+):
+
+    global SONGS
+
+    SONGS = load_songs()
+
+
+    if song_id not in SONGS:
+
+        await query.message.edit_text(
+            "❌ آهنگ پیدا نشد."
+        )
+
+        return
+
+
+    song = SONGS[song_id]
+
+    file_id = song.get("file_id")
+
+
+    if not file_id:
+
+        await query.message.edit_text(
+
+            "❌ فایل این آهنگ ثبت نشده است.\n\n"
+            "لطفاً به ادمین اطلاع دهید."
+
+        )
+
+        return
+
+
+    chat_id = query.message.chat_id
+
+
+    await query.message.edit_text(
+
+        f"⏳ در حال ارسال {song['title']} ..."
+
+    )
+
+
+    caption = (
+
+        f"🎵 {song['title']}\n\n"
+
+        f"🔗 کانال رسمی ما: {TELEGRAM_CHANNEL}"
+
+    )
+
+
+    sent = False
+
+
+    # =====================================================
+    # AUDIO
+    # =====================================================
+
+    try:
+
+        await context.bot.send_audio(
+
+            chat_id=chat_id,
+
+            audio=file_id,
+
+            caption=caption,
+
+        )
+
+        sent = True
+
+
+    except Exception:
+
+        logger.exception(
+            "send_audio failed"
+        )
+
+
+    # =====================================================
+    # DOCUMENT FALLBACK
+    # =====================================================
+
+    if not sent:
+
+        try:
+
+            await context.bot.send_document(
+
+                chat_id=chat_id,
+
+                document=file_id,
+
+                caption=caption,
+
+            )
+
+            sent = True
+
+
+        except Exception:
+
+            logger.exception(
+                "send_document failed"
+            )
+
+
+    # =====================================================
+    # SUCCESS
+    # =====================================================
+
+    if sent:
+
+        SONGS[song_id]["downloads"] = (
+
+            int(
+                SONGS[song_id].get(
+                    "downloads",
+                    0,
+                )
+            )
+            + 1
+
+        )
+
+
+        save_songs(SONGS)
+
+
+        await context.bot.send_message(
+
+            chat_id=chat_id,
+
+            text=(
+
+                "🎧 آهنگ با موفقیت ارسال شد! ❤️\n\n"
+
+                "برای دریافت آهنگ‌های دیگر "
+                "از آرشیو استفاده کنید."
+
+            ),
+
+            reply_markup=InlineKeyboardMarkup([
+
+                [
+
+                    InlineKeyboardButton(
+                        "🎵 آرشیو آهنگ‌ها",
+                        callback_data="archive_0",
+                    )
+
+                ],
+
+                [
+
+                    InlineKeyboardButton(
+                        "🔥 جدیدترین‌ها",
+                        callback_data="latest_songs",
+                    )
+
+                ],
+
+                [
+
+                    InlineKeyboardButton(
+                        "🏠 منوی اصلی",
+                        callback_data="main_menu",
+                    )
+
+                ],
+
+            ]),
+
+        )
+
+
+    else:
+
+        await context.bot.send_message(
+
+            chat_id=chat_id,
+
+            text=(
+
+                "❌ ارسال فایل ناموفق بود.\n\n"
+
+                "لطفاً به ادمین اطلاع دهید."
+
+            ),
+
+        )
+
+
+# =========================================================
 # BUTTON HANDLER
 # =========================================================
 
@@ -1194,95 +1438,6 @@ async def button(
     # =====================================================
 
     if data == "noop":
-        return
-
-
-    # =====================================================
-    # YOUTUBE SUPPORT
-    # =====================================================
-
-    if data == "youtube_support":
-
-        context.user_data[
-            "waiting_for_search"
-        ] = False
-
-
-        await query.message.edit_text(
-
-            youtube_support_text(),
-
-            reply_markup=youtube_support_menu(),
-
-        )
-
-        return
-
-
-    # =====================================================
-    # YOUTUBE CONFIRM
-    # =====================================================
-
-    if data == "youtube_confirm":
-
-        # -------------------------------------------------
-        # HONOR SYSTEM
-        #
-        # Telegram/YouTube do not actually verify
-        # the subscription in this version.
-        # -------------------------------------------------
-
-        context.user_data[
-            "youtube_confirmed"
-        ] = True
-
-
-        keyboard = InlineKeyboardMarkup([
-
-            [
-
-                InlineKeyboardButton(
-                    "🎵 ورود به آرشیو آهنگ‌ها",
-                    callback_data="archive_0",
-                )
-
-            ],
-
-            [
-
-                InlineKeyboardButton(
-                    "🔥 جدیدترین‌ها",
-                    callback_data="latest_songs",
-                )
-
-            ],
-
-            [
-
-                InlineKeyboardButton(
-                    "🏠 منوی اصلی",
-                    callback_data="main_menu",
-                )
-
-            ],
-
-        ])
-
-
-        await query.message.edit_text(
-
-            "🎉 ممنون از حمایتت ❤️\n\n"
-
-            "عضویت شما تأیید شد و دسترسی دریافت آهنگ‌ها "
-            "برای شما فعال شد. 🎧\n\n"
-
-            "حالا می‌تونی وارد آرشیو بشی و آهنگ موردنظرت "
-            "رو دریافت کنی. 🔥",
-
-            reply_markup=keyboard,
-
-        )
-
         return
 
 
@@ -1326,11 +1481,7 @@ async def button(
 
             "/add نام آهنگ\n\n"
 
-            "سپس فایل صوتی آهنگ را بفرستید.\n\n"
-
-            "مثال:\n"
-
-            "/add بزن به سیم آخر",
+            "سپس فایل صوتی آهنگ را بفرستید.",
 
             reply_markup=InlineKeyboardMarkup([
 
@@ -1788,12 +1939,13 @@ async def button(
         song = SONGS[song_id]
 
 
-        # -------------------------------------------------
-        # ALREADY CONFIRMED
-        # -------------------------------------------------
+        # =================================================
+        # USER ALREADY PASSED SUBSCRIBE GATE
+        # =================================================
 
         if context.user_data.get(
-            "youtube_confirmed"
+            "youtube_confirmed",
+            False,
         ):
 
             keyboard = InlineKeyboardMarkup([
@@ -1813,7 +1965,7 @@ async def button(
 
                     InlineKeyboardButton(
                         "🔴 حمایت دوباره در یوتیوب ❤️",
-                        callback_data="youtube_support",
+                        url=YOUTUBE_URL,
                     )
 
                 ],
@@ -1834,69 +1986,123 @@ async def button(
 
                 f"🎵 {song['title']}\n\n"
 
-                "✅ دسترسی شما فعال است.\n\n"
+                "❤️ دسترسی دانلود شما فعال است.\n\n"
 
-                "برای دریافت فایل روی دکمه دانلود بزنید.",
+                "برای دریافت فایل روی دانلود بزنید.",
 
                 reply_markup=keyboard,
 
             )
 
+            return
+
+
+        # =================================================
+        # FIRST TIME
+        # =================================================
+
+        await query.message.edit_text(
+
+            youtube_gate_text(song),
+
+            reply_markup=youtube_gate_keyboard(song_id),
+
+        )
+
+        return
+
+
+    # =====================================================
+    # YOUTUBE CONFIRM
+    # =====================================================
+
+    if data.startswith("youtube_confirm_"):
+
+        song_id = data.split(
+            "_",
+            2,
+        )[2]
+
+
+        if song_id not in SONGS:
+
+            await query.message.edit_text(
+                "❌ آهنگ پیدا نشد."
+            )
+
+            return
+
+
+        song = SONGS[song_id]
+
 
         # -------------------------------------------------
-        # NOT CONFIRMED
+        # Honor-system confirmation
         # -------------------------------------------------
 
-        else:
+        attempts = int(
+            context.user_data.get(
+                "youtube_attempts",
+                0,
+            )
+        )
 
-            keyboard = InlineKeyboardMarkup([
 
-                [
+        # =================================================
+        # FIRST CLICK
+        # =================================================
 
-                    InlineKeyboardButton(
-                        "🔴 سابسکرایب در یوتیوب ❤️",
-                        url=YOUTUBE_URL,
-                    )
+        if attempts == 0:
 
-                ],
-
-                [
-
-                    InlineKeyboardButton(
-                        "✅ سابسکرایب کردم — ادامه",
-                        callback_data="youtube_confirm",
-                    )
-
-                ],
-
-                [
-
-                    InlineKeyboardButton(
-                        "🔙 آرشیو",
-                        callback_data="archive_0",
-                    )
-
-                ],
-
-            ])
+            context.user_data[
+                "youtube_attempts"
+            ] = 1
 
 
             await query.message.edit_text(
 
-                "❤️ یک حمایت کوچک برای ادامه\n\n"
+                youtube_warning_text(song),
 
-                f"🎵 آهنگ: {song['title']}\n\n"
-
-                "اگر از موسیقی‌های ما خوشت میاد، "
-                "لطفاً قبل از دریافت آهنگ در یوتیوب "
-                "کانال ما را Subscribe کن. 🎧\n\n"
-
-                "بعد از Subscribe به ربات برگرد و "
-                "روی «سابسکرایب کردم — ادامه» بزن.",
-
-                reply_markup=keyboard,
+                reply_markup=(
+                    youtube_warning_keyboard(
+                        song_id
+                    )
+                ),
 
             )
+
+            return
+
+
+        # =================================================
+        # SECOND CLICK
+        # =================================================
+
+        context.user_data[
+            "youtube_attempts"
+        ] = attempts + 1
+
+
+        context.user_data[
+            "youtube_confirmed"
+        ] = True
+
+
+        await query.message.edit_text(
+
+            "🎉 ممنون از حمایتت ❤️\n\n"
+
+            "آهنگ در حال ارسال است... 🎧"
+
+        )
+
+
+        # مستقیم آهنگ را ارسال کن
+        await send_song(
+            query,
+            context,
+            song_id,
+        )
 
         return
 
@@ -1914,243 +2120,42 @@ async def button(
 
 
         if not context.user_data.get(
-            "youtube_confirmed"
+            "youtube_confirmed",
+            False,
         ):
 
-            await query.message.edit_text(
+            if song_id not in SONGS:
 
-                "🔒 برای دریافت آهنگ ابتدا از ما در "
-                "یوتیوب حمایت کن. ❤️\n\n"
-
-                "بعد از Subscribe به ربات برگرد.",
-
-                reply_markup=InlineKeyboardMarkup([
-
-                    [
-
-                        InlineKeyboardButton(
-                            "🔴 سابسکرایب در یوتیوب ❤️",
-                            url=YOUTUBE_URL,
-                        )
-
-                    ],
-
-                    [
-
-                        InlineKeyboardButton(
-                            "✅ سابسکرایب کردم — ادامه",
-                            callback_data="youtube_confirm",
-                        )
-
-                    ],
-
-                    [
-
-                        InlineKeyboardButton(
-                            "🔙 آرشیو",
-                            callback_data="archive_0",
-                        )
-
-                    ],
-
-                ]),
-
-            )
-
-            return
-
-
-        if song_id not in SONGS:
-
-            await query.message.edit_text(
-                "❌ آهنگ پیدا نشد."
-            )
-
-            return
-
-
-        song = SONGS[song_id]
-
-
-        file_id = song.get(
-            "file_id"
-        )
-
-
-        if not file_id:
-
-            await query.message.edit_text(
-
-                "❌ فایل این آهنگ ثبت نشده است.\n\n"
-                "لطفاً به ادمین اطلاع دهید."
-
-            )
-
-            return
-
-
-        chat_id = query.message.chat_id
-
-
-        await query.message.edit_text(
-
-            f"⏳ در حال ارسال {song['title']} ..."
-
-        )
-
-
-        caption = (
-
-            f"🎵 {song['title']}\n\n"
-
-            f"🔗 کانال رسمی ما: {TELEGRAM_CHANNEL}"
-
-        )
-
-
-        sent = False
-
-
-        # =================================================
-        # SEND AS AUDIO
-        # =================================================
-
-        try:
-
-            await context.bot.send_audio(
-
-                chat_id=chat_id,
-
-                audio=file_id,
-
-                caption=caption,
-
-            )
-
-            sent = True
-
-
-        except Exception:
-
-            logger.exception(
-                "send_audio failed"
-            )
-
-
-        # =================================================
-        # FALLBACK DOCUMENT
-        # =================================================
-
-        if not sent:
-
-            try:
-
-                await context.bot.send_document(
-
-                    chat_id=chat_id,
-
-                    document=file_id,
-
-                    caption=caption,
-
+                await query.message.edit_text(
+                    "❌ آهنگ پیدا نشد."
                 )
 
-                sent = True
+                return
 
 
-            except Exception:
-
-                logger.exception(
-                    "send_document failed"
-                )
+            song = SONGS[song_id]
 
 
-        # =================================================
-        # SUCCESS
-        # =================================================
+            await query.message.edit_text(
 
-        if sent:
+                youtube_gate_text(song),
 
-            SONGS[song_id]["downloads"] = (
-
-                int(
-                    SONGS[song_id].get(
-                        "downloads",
-                        0,
+                reply_markup=(
+                    youtube_gate_keyboard(
+                        song_id
                     )
-                )
-                + 1
-
-            )
-
-
-            save_songs(SONGS)
-
-
-            await context.bot.send_message(
-
-                chat_id=chat_id,
-
-                text=(
-
-                    "🎧 آهنگ با موفقیت ارسال شد!\n\n"
-
-                    "❤️ ممنون که از Majed AI Music حمایت می‌کنی.\n\n"
-
-                    "برای دریافت آهنگ‌های دیگر "
-                    "از آرشیو استفاده کنید."
-
-                ),
-
-                reply_markup=InlineKeyboardMarkup([
-
-                    [
-
-                        InlineKeyboardButton(
-                            "🎵 آرشیو آهنگ‌ها",
-                            callback_data="archive_0",
-                        )
-
-                    ],
-
-                    [
-
-                        InlineKeyboardButton(
-                            "🔴 حمایت از ما در یوتیوب ❤️",
-                            callback_data="youtube_support",
-                        )
-
-                    ],
-
-                    [
-
-                        InlineKeyboardButton(
-                            "🏠 منوی اصلی",
-                            callback_data="main_menu",
-                        )
-
-                    ],
-
-                ]),
-
-            )
-
-
-        else:
-
-            await context.bot.send_message(
-
-                chat_id=chat_id,
-
-                text=(
-
-                    "❌ ارسال فایل ناموفق بود.\n\n"
-
-                    "لطفاً به ادمین اطلاع دهید."
-
                 ),
 
             )
+
+            return
+
+
+        await send_song(
+            query,
+            context,
+            song_id,
+        )
 
         return
 
