@@ -3,9 +3,10 @@ import logging
 import json
 import asyncio
 import threading
+import uuid
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 
@@ -20,6 +21,7 @@ ADMIN_ID = int(admin_id_env)
 
 YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
 DB_FILE = "songs_db.json"
+PAGE_SIZE = 10
 
 def load_songs():
     if os.path.exists(DB_FILE):
@@ -32,7 +34,7 @@ def load_songs():
         except Exception as e:
             logging.error(f"Error reading {DB_FILE}: {e}. Returning default database.")
     return {
-        "song_1": {
+        "s_default": {
             "title": "🎵 بزن به سیم آخر",
             "file_id": "",
             "downloads": 0
@@ -86,23 +88,24 @@ def init_bot_background():
 
 init_bot_background()
 
-async def start(update: Update, context):
-    keyboard = [
-        [InlineKeyboardButton("❤️ سابسکرایب در کانال یوتیوب", url=YOUTUBE_URL)],
-        [InlineKeyboardButton("🎵 دریافت آهنگ", callback_data="browse_songs")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+def get_main_menu_markup():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❤️ عضویت در یوتیوب", url=YOUTUBE_URL)],
+        [InlineKeyboardButton("🎵 آرشیو آهنگ‌ها", callback_data="archive_0")],
+        [InlineKeyboardButton("🔎 جستجوی آهنگ", callback_data="search_start"),
+         InlineKeyboardButton("🔥 جدیدترین آهنگ‌ها", callback_data="latest_songs")]
+    ])
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
-        "✨ **به ربات رسمی کانال Deep House Farsi خوش آمدید!**\n\n"
-        "🎧 جهت دریافت فایل‌های صوتی:\n"
-        "1️⃣ ابتدا روی دکمه‌ی بالا کلیک کرده و کانال یوتیوب ما را سابسکرایب کنید.\n"
-        "2️⃣ سپس روی دکمه‌ی **دریافت آهنگ** کلیک کنید تا آرشیو موزیک‌ها را مشاهده فرمایید.\n\n"
-        "🔥 از حمایت و همراهی شما سپاسگزاریم!"
+        "✨ **به Deep House Farsi خوش آمدید**\n\n"
+        "🎧 آرشیو اختصاصی آهنگ‌های ما\n"
+        "برای دریافت آهنگ موردنظر، از گزینه‌های زیر استفاده کنید ❤️"
     )
     if update.message:
-        await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
+        await update.message.reply_text(welcome_text, reply_markup=get_main_menu_markup(), parse_mode="Markdown")
 
-async def add_song_command(update: Update, context):
+async def add_song_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         await update.message.reply_text("شما دسترسی مدیریتی ندارید.")
@@ -120,9 +123,38 @@ async def add_song_command(update: Update, context):
     context.user_data['pending_title'] = song_title
     await update.message.reply_text(f"✅ عنوان «{song_title}» ثبت شد.\nاکنون فایل صوتی یا موزیک‌ویدیو را بفرستید.")
 
-async def handle_media(update: Update, context):
+async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
+        # بررسی اینکه آیا کاربر منتظر ورودی جستجو است
+        if context.user_data.get('waiting_for_search'):
+            context.user_data['waiting_for_search'] = False
+            query_text = update.message.text.strip()
+            global SONGS
+            SONGS = load_songs()
+            
+            matched = []
+            for s_id, info in SONGS.items():
+                if query_text.lower() in info['title'].lower():
+                    matched.append((s_id, info))
+            
+            keyboard = []
+            for s_id, info in matched[:10]:
+                keyboard.append([InlineKeyboardButton(f"🎧 {info['title']}", callback_data=f"sel_{s_id}")])
+            keyboard.append([InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")])
+            
+            if matched:
+                await update.message.reply_text(
+                    f"🔎 **نتایج جستجو برای:** `{query_text}`\nتعداد یافت‌شده: {len(matched)}",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text(
+                    f"❌ هیچ آهنگی با عبارت «{query_text}» یافت نشد.",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")]]),
+                    parse_mode="Markdown"
+                )
         return
 
     global SONGS
@@ -140,7 +172,7 @@ async def handle_media(update: Update, context):
         if 'pending_title' in context.user_data:
             title = context.user_data.pop('pending_title')
             SONGS = load_songs()
-            song_id = f"song_{len(SONGS) + 1}"
+            song_id = uuid.uuid4().hex[:8]
             
             SONGS[song_id] = {
                 "title": title,
@@ -159,7 +191,7 @@ async def handle_media(update: Update, context):
                 parse_mode="Markdown"
             )
 
-async def button(update: Update, context):
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global SONGS
     SONGS = load_songs()
     
@@ -169,39 +201,82 @@ async def button(update: Update, context):
     data = query.data
     
     if data == "main_menu":
-        keyboard = [
-            [InlineKeyboardButton("❤️ سابسکرایب در کانال یوتیوب", url=YOUTUBE_URL)],
-            [InlineKeyboardButton("🎵 دریافت آهنگ", callback_data="browse_songs")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
+        context.user_data['waiting_for_search'] = False
         await query.message.edit_text(
-            "✨ **منوی اصلی ربات Deep House Farsi**\n\nاز طریق دکمه‌ی زیر می‌توانید به آرشیو آهنگ‌ها دسترسی داشته باشید:",
-            reply_markup=reply_markup,
+            "✨ **به Deep House Farsi خوش آمدید**\n\n"
+            "🎧 آرشیو اختصاصی آهنگ‌های ما\n"
+            "برای دریافت آهنگ موردنظر، از گزینه‌های زیر استفاده کنید ❤️",
+            reply_markup=get_main_menu_markup(),
             parse_mode="Markdown"
         )
 
-    elif data == "browse_songs":
+    elif data.startswith("archive_"):
+        page = int(data.split("_")[1])
+        song_items = list(SONGS.items())
+        total_songs = len(song_items)
+        max_page = (total_songs - 1) // PAGE_SIZE if total_songs > 0 else 0
+        
+        start_idx = page * PAGE_SIZE
+        end_idx = start_idx + PAGE_SIZE
+        page_items = song_items[start_idx:end_idx]
+        
         keyboard = []
-        for song_id, song_info in SONGS.items():
-            keyboard.append([InlineKeyboardButton(f"🎧 {song_info['title']}", callback_data=f"select_{song_id}")])
+        for s_id, info in page_items:
+            keyboard.append([InlineKeyboardButton(f"🎧 {info['title']}", callback_data=f"sel_{s_id}")])
+        
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(InlineKeyboardButton("⬅️ صفحه قبل", callback_data=f"archive_{page - 1}"))
+        nav_buttons.append(InlineKeyboardButton(f"📄 {page + 1} / {max_page + 1}", callback_data="noop"))
+        if end_idx < total_songs:
+            nav_buttons.append(InlineKeyboardButton("صفحه بعد ➡️", callback_data=f"archive_{page + 1}"))
+        
+        if nav_buttons:
+            keyboard.append(nav_buttons)
+        
         keyboard.append([InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")])
-        reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.message.edit_text(
-            "📂 **لیست آهنگ‌های موجود:**\n\nآهنگ مورد نظر خود را از لیست زیر انتخاب کنید:",
-            reply_markup=reply_markup,
+            f"📂 **آرشیوی از بهترین‌های Deep House**\nصفحه {page + 1} از {max_page + 1}:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
 
-    elif data.startswith("select_"):
-        song_id = data.replace("select_", "")
+    elif data == "search_start":
+        context.user_data['waiting_for_search'] = True
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")]])
+        await query.message.edit_text(
+            "🔎 **جستجوی آهنگ**\n\nلطفاً نام یا بخشی از نام آهنگ موردنظر خود را ارسال کنید:",
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+
+    elif data == "latest_songs":
+        song_items = list(SONGS.items())
+        latest = song_items[-10:][::-1] # 10 آهنگ آخر معکوس
+        
+        keyboard = []
+        for s_id, info in latest:
+            keyboard.append([InlineKeyboardButton(f"🔥 {info['title']}", callback_data=f"sel_{s_id}")])
+        keyboard.append([InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")])
+        
+        await query.message.edit_text(
+            "🔥 **جدیدترین آهنگ‌های اضافه شده:**",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+
+    elif data == "noop":
+        pass
+
+    elif data.startswith("sel_"):
+        song_id = data.replace("sel_", "")
         if song_id in SONGS:
             song_info = SONGS[song_id]
             keyboard = [
-                [InlineKeyboardButton("❤️ سابسکرایب در یوتیوب", url=YOUTUBE_URL)],
+                [InlineKeyboardButton("❤️ عضویت در یوتیوب", url=YOUTUBE_URL)],
                 [InlineKeyboardButton("✅ سابسکرایب کردم، دریافت فایل", callback_data=f"verify_{song_id}")],
-                [InlineKeyboardButton("🔙 بازگشت به لیست آهنگ‌ها", callback_data="browse_songs")]
+                [InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -243,7 +318,7 @@ async def button(update: Update, context):
             else:
                 await context.bot.send_message(chat_id=chat_id, text="❌ خطا در ارسال فایل. لطفاً به ادمین اطلاع دهید.")
 
-async def stats(update: Update, context):
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         await update.message.reply_text("شما دسترسی مدیریتی ندارید.")
@@ -262,7 +337,7 @@ async def stats(update: Update, context):
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("add", add_song_command))
 application.add_handler(CommandHandler("stats", stats))
-application.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL, handle_media))
+application.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL | filters.TEXT & ~filters.COMMAND, handle_media))
 application.add_handler(CallbackQueryHandler(button))
 
 @app.route("/")
