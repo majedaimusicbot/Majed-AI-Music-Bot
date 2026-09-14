@@ -3,6 +3,7 @@ import logging
 import json
 import uuid
 import asyncio
+import threading
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
@@ -292,21 +293,25 @@ telegram_app.add_handler(CommandHandler("stats", stats))
 telegram_app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL | filters.TEXT & ~filters.COMMAND, handle_media))
 telegram_app.add_handler(CallbackQueryHandler(button))
 
-# تنظیم وب‌هوک به محض بالا آمدن سرور
-with app.app_context():
-    if RENDER_EXTERNAL_URL:
-        webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/webhook"
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        async def set_wh():
+# Event Loop و Thread اختصاصی برای اجرای ربات
+bot_loop = asyncio.new_event_loop()
+
+def run_bot_loop():
+    asyncio.set_event_loop(bot_loop)
+    
+    async def setup_app():
+        await telegram_app.initialize()
+        await telegram_app.start()
+        if RENDER_EXTERNAL_URL:
+            webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/webhook"
             await telegram_app.bot.set_webhook(url=webhook_url)
-        
-        loop.run_until_complete(set_wh())
-        logging.info(f"Webhook set to: {webhook_url}")
+            logging.info(f"Webhook set to: {webhook_url}")
+
+    bot_loop.run_until_complete(setup_app())
+    bot_loop.run_forever()
+
+bot_thread = threading.Thread(target=run_bot_loop, daemon=True)
+bot_thread.start()
 
 @app.route("/", methods=["GET"])
 def index():
@@ -315,15 +320,21 @@ def index():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     if request.headers.get("content-type") == "application/json":
-        json_data = request.get_json(force=True)
+        raw_data = request.get_data(as_text=True)
+        try:
+            json_data = json.loads(raw_data)
+        except Exception:
+            return "Invalid JSON", 400
+
+        if not isinstance(json_data, dict):
+            return "Invalid JSON", 400
+
         update = Update.de_json(json_data, telegram_app.bot)
         
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.run_coroutine_threadsafe(telegram_app.process_update(update), loop)
-        else:
-            loop.run_until_complete(telegram_app.process_update(update))
-            
+        bot_loop.call_soon_threadsafe(
+            telegram_app.update_queue.put_nowait,
+            update
+        )
         return "OK", 200
     return "Invalid request", 403
 
