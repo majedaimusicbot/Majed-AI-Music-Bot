@@ -6,7 +6,7 @@ import threading
 import logging
 import time
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 from telegram import (
     Update,
@@ -35,7 +35,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# جلوگیری از نمایش اطلاعات حساس درخواست‌های Telegram در لاگ
+# جلوگیری از نمایش اطلاعات حساس Telegram در لاگ
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("telegram").setLevel(logging.WARNING)
@@ -63,12 +63,52 @@ if not ADMIN_ID_RAW:
 
 
 try:
-    ADMIN_ID = int(ADMIN_ID_RAW)
+
+    ADMIN_ID = int(
+        ADMIN_ID_RAW
+    )
 
 except ValueError:
+
     raise RuntimeError(
         "ADMIN_ID must be a numeric Telegram user ID."
     )
+
+
+# =========================================================
+# RENDER WEBHOOK
+# =========================================================
+
+RENDER_EXTERNAL_URL = os.environ.get(
+    "RENDER_EXTERNAL_URL"
+)
+
+CUSTOM_WEBHOOK_URL = os.environ.get(
+    "WEBHOOK_URL"
+)
+
+WEBHOOK_SECRET = os.environ.get(
+    "WEBHOOK_SECRET"
+)
+
+
+if CUSTOM_WEBHOOK_URL:
+
+    WEBHOOK_URL = (
+        CUSTOM_WEBHOOK_URL.rstrip("/")
+        + "/telegram"
+    )
+
+elif RENDER_EXTERNAL_URL:
+
+    WEBHOOK_URL = (
+        RENDER_EXTERNAL_URL.rstrip("/")
+        + "/telegram"
+    )
+
+else:
+
+    WEBHOOK_URL = None
 
 
 # =========================================================
@@ -109,9 +149,6 @@ app = Flask(__name__)
 # =========================================================
 
 def load_songs():
-    """
-    Load songs from songs_db.json.
-    """
 
     if not os.path.exists(DB_FILE):
         return {}
@@ -129,9 +166,15 @@ def load_songs():
             if not content:
                 return {}
 
-            data = json.loads(content)
+            data = json.loads(
+                content
+            )
 
-            if isinstance(data, dict):
+            if isinstance(
+                data,
+                dict,
+            ):
+
                 return data
 
             return {}
@@ -146,11 +189,11 @@ def load_songs():
 
 
 def save_songs(songs):
-    """
-    Save songs safely.
-    """
 
-    tmp_file = DB_FILE + ".tmp"
+    tmp_file = (
+        DB_FILE
+        + ".tmp"
+    )
 
     try:
 
@@ -204,7 +247,9 @@ def get_total_songs():
 
     SONGS = load_songs()
 
-    return len(SONGS)
+    return len(
+        SONGS
+    )
 
 
 def get_total_downloads():
@@ -242,8 +287,13 @@ def get_total_downloads():
 
 def main_menu():
 
-    total_songs = get_total_songs()
-    total_downloads = get_total_downloads()
+    total_songs = (
+        get_total_songs()
+    )
+
+    total_downloads = (
+        get_total_downloads()
+    )
 
     return InlineKeyboardMarkup([
 
@@ -290,10 +340,16 @@ def main_menu():
 
 def main_menu_text():
 
-    total_songs = get_total_songs()
-    total_downloads = get_total_downloads()
+    total_songs = (
+        get_total_songs()
+    )
+
+    total_downloads = (
+        get_total_downloads()
+    )
 
     return (
+
         "✨ به Majed AI Music خوش آمدید\n\n"
 
         "🎧 آرشیو اختصاصی موسیقی\n"
@@ -306,6 +362,7 @@ def main_menu_text():
 
         "اگر موسیقی‌های ما رو دوست داری، "
         "با یک Subscribe رایگان از ما حمایت کن. 🔴"
+
     )
 
 
@@ -313,7 +370,9 @@ def main_menu_text():
 # YOUTUBE GATE
 # =========================================================
 
-def youtube_gate_keyboard(song_id):
+def youtube_gate_keyboard(
+    song_id
+):
 
     return InlineKeyboardMarkup([
 
@@ -343,9 +402,12 @@ def youtube_gate_keyboard(song_id):
     ])
 
 
-def youtube_gate_text(song):
+def youtube_gate_text(
+    song
+):
 
     return (
+
         "🚨⚠️ فقط یک مرحله تا دریافت آهنگ باقی مانده\n\n"
 
         f"🎵 {song['title']}\n\n"
@@ -355,6 +417,7 @@ def youtube_gate_text(song):
 
         "🔴 بعد به ربات برگرد و "
         "«انجام دادم» رو بزن."
+
     )
 
 
@@ -362,13 +425,17 @@ def youtube_gate_text(song):
 # SECOND WARNING
 # =========================================================
 
-def youtube_second_warning_text(song):
+def youtube_second_warning_text(
+    song
+):
 
     return (
+
         "⚠️ هنوز این مرحله کامل نشده!\n\n"
 
         "🔴 اول در یوتیوب Subscribe کن،\n"
         "بعد دوباره «انجام دادم» رو بزن."
+
     )
 
 
@@ -376,7 +443,9 @@ def youtube_second_warning_text(song):
 # PER-SONG CONFIRMATION
 # =========================================================
 
-def get_confirmation_attempts(context):
+def get_confirmation_attempts(
+    context
+):
 
     attempts = context.user_data.get(
         "youtube_confirmation_attempts"
@@ -401,8 +470,10 @@ def get_song_attempts(
     song_id,
 ):
 
-    attempts = get_confirmation_attempts(
-        context
+    attempts = (
+        get_confirmation_attempts(
+            context
+        )
     )
 
     try:
@@ -427,13 +498,17 @@ def increment_song_attempts(
     song_id,
 ):
 
-    attempts = get_confirmation_attempts(
-        context
+    attempts = (
+        get_confirmation_attempts(
+            context
+        )
     )
 
-    current = get_song_attempts(
-        context,
-        song_id,
+    current = (
+        get_song_attempts(
+            context,
+            song_id,
+        )
     )
 
     current += 1
@@ -445,7 +520,9 @@ def increment_song_attempts(
     return current
 
 
-def get_confirmed_songs(context):
+def get_confirmed_songs(
+    context
+):
 
     confirmed = context.user_data.get(
         "youtube_confirmed_songs"
@@ -470,11 +547,16 @@ def is_song_confirmed(
     song_id,
 ):
 
-    confirmed = get_confirmed_songs(
-        context
+    confirmed = (
+        get_confirmed_songs(
+            context
+        )
     )
 
-    return song_id in confirmed
+    return (
+        song_id
+        in confirmed
+    )
 
 
 def confirm_song(
@@ -482,8 +564,10 @@ def confirm_song(
     song_id,
 ):
 
-    confirmed = get_confirmed_songs(
-        context
+    confirmed = (
+        get_confirmed_songs(
+            context
+        )
     )
 
     confirmed.add(
@@ -495,7 +579,9 @@ def confirm_song(
 # PROCESSING LOCK
 # =========================================================
 
-def get_processing_songs(context):
+def get_processing_songs(
+    context
+):
 
     processing = context.user_data.get(
         "youtube_processing_songs"
@@ -563,7 +649,9 @@ def admin_menu():
 # ARCHIVE
 # =========================================================
 
-def archive_menu(page=0):
+def archive_menu(
+    page=0
+):
 
     global SONGS
 
@@ -573,11 +661,14 @@ def archive_menu(page=0):
         SONGS.items()
     )
 
-    total = len(items)
+    total = len(
+        items
+    )
 
     if total == 0:
 
         return (
+
             "📂 آرشیو آهنگ‌ها در حال حاضر خالی است.",
 
             InlineKeyboardMarkup([
@@ -590,6 +681,7 @@ def archive_menu(page=0):
                 ]
 
             ]),
+
         )
 
     max_page = (
@@ -615,7 +707,9 @@ def archive_menu(page=0):
         + PAGE_SIZE
     )
 
-    page_items = items[start:end]
+    page_items = items[
+        start:end
+    ]
 
     keyboard = []
 
@@ -632,7 +726,9 @@ def archive_menu(page=0):
 
             InlineKeyboardButton(
                 title,
-                callback_data=f"sel_{song_id}",
+                callback_data=(
+                    f"sel_{song_id}"
+                ),
             )
 
         ])
@@ -688,12 +784,14 @@ def archive_menu(page=0):
     ])
 
     text = (
+
         "🎵 آرشیو آهنگ‌های Majed AI Music\n\n"
 
         f"🎧 آهنگ‌ها: {total}\n"
         f"📄 صفحه {page + 1} از {max_page + 1}\n\n"
 
         "👇 آهنگ موردنظرت رو انتخاب کن:"
+
     )
 
     return (
@@ -721,8 +819,11 @@ async def start(
     ] = False
 
     await update.message.reply_text(
+
         main_menu_text(),
+
         reply_markup=main_menu(),
+
     )
 
 
@@ -981,7 +1082,9 @@ async def rename_song_command(
 
         return
 
-    song_id = context.args[0]
+    song_id = context.args[
+        0
+    ]
 
     new_title = (
         "🎵 "
@@ -1133,7 +1236,9 @@ async def stats(
         )
 
     await update.message.reply_text(
-        "\n".join(lines)
+        "\n".join(
+            lines
+        )
     )
 
 
@@ -1333,7 +1438,9 @@ async def handle_message(
 
     song_id = uuid.uuid4().hex[:8]
 
-    SONGS[song_id] = {
+    SONGS[
+        song_id
+    ] = {
 
         "title": title,
 
@@ -1500,7 +1607,10 @@ async def send_song(
             song_id
         ][
             "downloads"
-        ] = current_downloads + 1
+        ] = (
+            current_downloads
+            + 1
+        )
 
         save_songs(
             SONGS
@@ -1912,7 +2022,9 @@ async def button(
     # ARCHIVE
     # =====================================================
 
-    if data.startswith("archive_"):
+    if data.startswith(
+        "archive_"
+    ):
 
         try:
 
@@ -1928,7 +2040,9 @@ async def button(
             page = 0
 
         text, markup = (
-            archive_menu(page)
+            archive_menu(
+                page
+            )
         )
 
         await query.message.edit_text(
@@ -2054,7 +2168,9 @@ async def button(
     # SELECT SONG
     # =====================================================
 
-    if data.startswith("sel_"):
+    if data.startswith(
+        "sel_"
+    ):
 
         song_id = data.split(
             "_",
@@ -2090,7 +2206,7 @@ async def button(
         ]
 
         # =================================================
-        # ALREADY CONFIRMED FOR THIS SONG
+        # ALREADY CONFIRMED
         # =================================================
 
         if is_song_confirmed(
@@ -2147,7 +2263,7 @@ async def button(
             return
 
         # =================================================
-        # NEW / NOT CONFIRMED SONG
+        # NEW SONG
         # =================================================
 
         await query.message.edit_text(
@@ -2217,8 +2333,10 @@ async def button(
         # PROCESSING LOCK
         # =================================================
 
-        processing = get_processing_songs(
-            context
+        processing = (
+            get_processing_songs(
+                context
+            )
         )
 
         if song_id in processing:
@@ -2234,9 +2352,11 @@ async def button(
         # COUNT CLICK
         # =================================================
 
-        attempts = increment_song_attempts(
-            context,
-            song_id,
+        attempts = (
+            increment_song_attempts(
+                context,
+                song_id,
+            )
         )
 
         # =================================================
@@ -2286,24 +2406,12 @@ async def button(
         # =================================================
         # CLICK 3
         # =================================================
-        #
-        # بررسی نمایشی + سه ثانیه تأخیر + ارسال
-        #
-        # توجه:
-        # این نسخه عضویت YouTube را واقعاً از طریق API
-        # بررسی نمی‌کند.
-        #
-        # =================================================
 
         processing.add(
             song_id
         )
 
         try:
-
-            # ---------------------------------------------
-            # CHECKING SCREEN
-            # ---------------------------------------------
 
             await query.message.edit_text(
 
@@ -2312,17 +2420,18 @@ async def button(
 
             )
 
-            # ---------------------------------------------
-            # 3 SECOND DELAY
-            # ---------------------------------------------
-
             await asyncio.sleep(
                 3
             )
 
-            # ---------------------------------------------
+            # -------------------------------------------------
             # HONOR SYSTEM
-            # ---------------------------------------------
+            # -------------------------------------------------
+            #
+            # عضویت YouTube در این نسخه واقعاً از API
+            # بررسی نمی‌شود.
+            #
+            # -------------------------------------------------
 
             confirm_song(
                 context,
@@ -2387,10 +2496,6 @@ async def button(
 
             return
 
-        # =================================================
-        # CHECK PER-SONG CONFIRMATION
-        # =================================================
-
         if not is_song_confirmed(
             context,
             song_id,
@@ -2415,10 +2520,6 @@ async def button(
             )
 
             return
-
-        # =================================================
-        # DIRECT DOWNLOAD
-        # =================================================
 
         await send_song(
 
@@ -2521,11 +2622,14 @@ bot_start_error = None
 
 bot_started_at = None
 
+webhook_ready = False
+
 
 async def setup_bot():
 
     global bot_start_error
     global bot_started_at
+    global webhook_ready
 
     logger.info(
         "Initializing Telegram application..."
@@ -2538,50 +2642,56 @@ async def setup_bot():
     await telegram_app.initialize()
 
     # -----------------------------------------------------
-    # REMOVE OLD WEBHOOK
-    # -----------------------------------------------------
-
-    try:
-
-        await telegram_app.bot.delete_webhook(
-            drop_pending_updates=True
-        )
-
-        logger.info(
-            "Previous Telegram webhook removed."
-        )
-
-    except Exception:
-
-        logger.exception(
-            "Could not delete previous webhook."
-        )
-
-    # -----------------------------------------------------
     # START APPLICATION
     # -----------------------------------------------------
 
     await telegram_app.start()
 
-    if telegram_app.updater is None:
+    logger.info(
+        "Telegram application started."
+    )
+
+    # -----------------------------------------------------
+    # WEBHOOK
+    # -----------------------------------------------------
+
+    if not WEBHOOK_URL:
 
         raise RuntimeError(
-            "Telegram updater is unavailable."
+
+            "Webhook URL is not available. "
+            "RENDER_EXTERNAL_URL or WEBHOOK_URL "
+            "environment variable is required."
+
         )
 
-    # -----------------------------------------------------
-    # START POLLING
-    # -----------------------------------------------------
-
-    await telegram_app.updater.start_polling(
-
-        allowed_updates=Update.ALL_TYPES,
-
-        drop_pending_updates=True,
-
-        poll_interval=1.0,
-
+    logger.info(
+        "Setting Telegram webhook..."
     )
+
+    webhook_kwargs = {
+
+        "url": WEBHOOK_URL,
+
+        # پیام‌های معلق حذف نمی‌شوند
+        # تا بعد از restart از دست نروند
+        "drop_pending_updates": False,
+
+        "allowed_updates": Update.ALL_TYPES,
+
+    }
+
+    if WEBHOOK_SECRET:
+
+        webhook_kwargs[
+            "secret_token"
+        ] = WEBHOOK_SECRET
+
+    await telegram_app.bot.set_webhook(
+        **webhook_kwargs
+    )
+
+    webhook_ready = True
 
     bot_started_at = time.time()
 
@@ -2596,7 +2706,12 @@ async def setup_bot():
     )
 
     logger.info(
-        "Telegram polling is ACTIVE"
+        "Telegram WEBHOOK is ACTIVE"
+    )
+
+    logger.info(
+        "Webhook URL: %s",
+        WEBHOOK_URL,
     )
 
     logger.info(
@@ -2612,10 +2727,6 @@ def run_bot():
         bot_loop
     )
 
-    # -----------------------------------------------------
-    # START WITH RETRY
-    # -----------------------------------------------------
-
     retry_delay = 10
 
     while True:
@@ -2627,7 +2738,7 @@ def run_bot():
             )
 
             # -------------------------------------------------
-            # BOT IS NOW RUNNING
+            # KEEP ASYNC APPLICATION ALIVE
             # -------------------------------------------------
 
             bot_loop.run_forever()
@@ -2645,11 +2756,10 @@ def run_bot():
             )
 
             logger.error(
-                "Retrying Telegram bot in %s seconds...",
+                "Retrying in %s seconds...",
                 retry_delay,
             )
 
-            # اگر مشکل موقتی بود، دوباره تلاش می‌کند
             time.sleep(
                 retry_delay
             )
@@ -2678,36 +2788,163 @@ bot_thread.start()
 
 
 # =========================================================
-# FLASK ROUTES
+# TELEGRAM WEBHOOK ROUTE
+# =========================================================
+
+@app.post("/telegram")
+def telegram_webhook():
+
+    # -----------------------------------------------------
+    # OPTIONAL SECRET CHECK
+    # -----------------------------------------------------
+
+    if WEBHOOK_SECRET:
+
+        received_secret = request.headers.get(
+            "X-Telegram-Bot-Api-Secret-Token"
+        )
+
+        if received_secret != WEBHOOK_SECRET:
+
+            logger.warning(
+                "Rejected Telegram webhook request: "
+                "invalid secret."
+            )
+
+            return (
+                jsonify({
+                    "ok": False,
+                    "error": "Unauthorized",
+                }),
+                403,
+            )
+
+    # -----------------------------------------------------
+    # GET JSON
+    # -----------------------------------------------------
+
+    try:
+
+        data = request.get_json(
+            force=True,
+            silent=False,
+        )
+
+    except Exception:
+
+        logger.exception(
+            "Could not parse Telegram webhook JSON."
+        )
+
+        return (
+            jsonify({
+                "ok": False,
+            }),
+            400,
+        )
+
+    if not data:
+
+        return (
+            jsonify({
+                "ok": False,
+            }),
+            400,
+        )
+
+    # -----------------------------------------------------
+    # CONVERT TO PTB UPDATE
+    # -----------------------------------------------------
+
+    try:
+
+        update = Update.de_json(
+            data,
+            telegram_app.bot,
+        )
+
+    except Exception:
+
+        logger.exception(
+            "Could not create Telegram Update."
+        )
+
+        return (
+            jsonify({
+                "ok": False,
+            }),
+            400,
+        )
+
+    # -----------------------------------------------------
+    # PUT UPDATE INTO PTB QUEUE
+    # -----------------------------------------------------
+    #
+    # چون Webhook است، دیگر getUpdates / Polling نداریم.
+    #
+    # -----------------------------------------------------
+
+    try:
+
+        bot_loop.call_soon_threadsafe(
+
+            telegram_app.update_queue.put_nowait,
+
+            update,
+
+        )
+
+    except Exception:
+
+        logger.exception(
+            "Could not queue Telegram update."
+        )
+
+        return (
+            jsonify({
+                "ok": False,
+            }),
+            500,
+        )
+
+    # -----------------------------------------------------
+    # RESPOND IMMEDIATELY
+    # -----------------------------------------------------
+
+    return (
+        jsonify({
+            "ok": True,
+        }),
+        200,
+    )
+
+
+# =========================================================
+# HOME
 # =========================================================
 
 @app.get("/")
 def index():
 
     return (
-        "Majed AI Music Bot is running!",
+
+        "Majed AI Music Bot is running! "
+
+        "Webhook mode is active.",
+
         200,
+
     )
 
+
+# =========================================================
+# HEALTH
+# =========================================================
 
 @app.get("/health")
 def health():
 
-    polling_running = False
     telegram_running = False
-
-    try:
-
-        polling_running = bool(
-
-            telegram_app.updater
-            and telegram_app.updater.running
-
-        )
-
-    except Exception:
-
-        polling_running = False
 
     try:
 
@@ -2730,16 +2967,23 @@ def health():
 
     return jsonify({
 
-        "status": "ok",
+        "status":
+            "ok",
 
         "service":
             "Majed AI Music Bot",
 
+        "mode":
+            "webhook",
+
+        "webhook_url":
+            WEBHOOK_URL,
+
+        "webhook_ready":
+            webhook_ready,
+
         "telegram_running":
             telegram_running,
-
-        "polling_running":
-            polling_running,
 
         "bot_thread_alive":
             bot_thread.is_alive(),
