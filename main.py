@@ -4,6 +4,7 @@ import uuid
 import asyncio
 import threading
 import logging
+import time
 
 from flask import Flask, jsonify
 
@@ -33,6 +34,12 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+# جلوگیری از نمایش اطلاعات حساس درخواست‌های Telegram در لاگ
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("telegram").setLevel(logging.WARNING)
+logging.getLogger("telegram.ext").setLevel(logging.WARNING)
 
 
 # =========================================================
@@ -358,30 +365,15 @@ def youtube_gate_text(song):
 def youtube_second_warning_text(song):
 
     return (
-        "⚠️ هنوز Subscribe نکردی!\n\n"
+        "⚠️ هنوز این مرحله کامل نشده!\n\n"
 
-        "🔴 اول عضو شو، "
+        "🔴 اول در یوتیوب Subscribe کن،\n"
         "بعد دوباره «انجام دادم» رو بزن."
     )
 
 
 # =========================================================
 # PER-SONG CONFIRMATION
-# =========================================================
-#
-# برای هر آهنگ تعداد دفعات زدن دکمه جداگانه ذخیره می‌شود.
-#
-# روند:
-#
-# بار اول:
-#   هشدار کوتاه
-#
-# بار دوم:
-#   دوباره هشدار کوتاه
-#
-# بار سوم:
-#   بررسی عضویت + 3 ثانیه تأخیر + ارسال
-#
 # =========================================================
 
 def get_confirmation_attempts(context):
@@ -1120,12 +1112,21 @@ async def stats(
             )
         )
 
-        downloads = int(
-            info.get(
-                "downloads",
-                0,
+        try:
+
+            downloads = int(
+                info.get(
+                    "downloads",
+                    0,
+                )
             )
-        )
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+
+            downloads = 0
 
         lines.append(
             f"{index}. {title} — {downloads} دانلود"
@@ -1477,13 +1478,9 @@ async def send_song(
 
     if sent:
 
-        SONGS[
-            song_id
-        ][
-            "downloads"
-        ] = (
+        try:
 
-            int(
+            current_downloads = int(
                 SONGS[
                     song_id
                 ].get(
@@ -1491,9 +1488,19 @@ async def send_song(
                     0,
                 )
             )
-            + 1
 
-        )
+        except (
+            TypeError,
+            ValueError,
+        ):
+
+            current_downloads = 0
+
+        SONGS[
+            song_id
+        ][
+            "downloads"
+        ] = current_downloads + 1
 
         save_songs(
             SONGS
@@ -1549,7 +1556,7 @@ async def send_song(
 
                 "❌ ارسال فایل ناموفق بود.\n\n"
 
-                "لطفاً به ادمین اطلاع دهید."
+                "لطفاً چند لحظه بعد دوباره تلاش کن."
 
             ),
 
@@ -1572,7 +1579,13 @@ async def button(
     if not query:
         return
 
-    await query.answer()
+    try:
+
+        await query.answer()
+
+    except Exception:
+
+        pass
 
     SONGS = load_songs()
 
@@ -1711,12 +1724,28 @@ async def button(
             start=1,
         ):
 
+            try:
+
+                downloads = int(
+                    info.get(
+                        "downloads",
+                        0,
+                    )
+                )
+
+            except (
+                TypeError,
+                ValueError,
+            ):
+
+                downloads = 0
+
             lines.append(
 
                 f"{index}. "
                 f"{info.get('title', 'بدون نام')} "
                 f"— "
-                f"{int(info.get('downloads', 0))}"
+                f"{downloads}"
 
             )
 
@@ -1780,12 +1809,21 @@ async def button(
                     "بدون نام",
                 )
 
-                downloads = int(
-                    info.get(
-                        "downloads",
-                        0,
+                try:
+
+                    downloads = int(
+                        info.get(
+                            "downloads",
+                            0,
+                        )
                     )
-                )
+
+                except (
+                    TypeError,
+                    ValueError,
+                ):
+
+                    downloads = 0
 
                 lines.append(
 
@@ -2193,7 +2231,7 @@ async def button(
             return
 
         # =================================================
-        # COUNT THIS CLICK
+        # COUNT CLICK
         # =================================================
 
         attempts = increment_song_attempts(
@@ -2203,11 +2241,6 @@ async def button(
 
         # =================================================
         # CLICK 1
-        # =================================================
-        #
-        # بار اول:
-        # فقط هشدار کوتاه نشان داده می‌شود.
-        #
         # =================================================
 
         if attempts == 1:
@@ -2230,11 +2263,6 @@ async def button(
 
         # =================================================
         # CLICK 2
-        # =================================================
-        #
-        # بار دوم:
-        # دوباره همان هشدار کوتاه.
-        #
         # =================================================
 
         if attempts == 2:
@@ -2259,9 +2287,11 @@ async def button(
         # CLICK 3
         # =================================================
         #
-        # بار سوم:
-        # بررسی عضویت + سه ثانیه تأخیر
-        # سپس ارسال آهنگ.
+        # بررسی نمایشی + سه ثانیه تأخیر + ارسال
+        #
+        # توجه:
+        # این نسخه عضویت YouTube را واقعاً از طریق API
+        # بررسی نمی‌کند.
         #
         # =================================================
 
@@ -2277,7 +2307,8 @@ async def button(
 
             await query.message.edit_text(
 
-                "⏳ در حال بررسی عضویت..."
+                "⏳ در حال بررسی عضویت...\n\n"
+                "لطفاً چند لحظه صبر کن."
 
             )
 
@@ -2291,12 +2322,6 @@ async def button(
 
             # ---------------------------------------------
             # HONOR SYSTEM
-            # ---------------------------------------------
-            #
-            # عضویت YouTube در این نسخه واقعاً بررسی
-            # نمی‌شود و پس از مرحله تأیید کاربر پذیرفته
-            # می‌شود.
-            #
             # ---------------------------------------------
 
             confirm_song(
@@ -2494,6 +2519,90 @@ bot_thread = None
 
 bot_start_error = None
 
+bot_started_at = None
+
+
+async def setup_bot():
+
+    global bot_start_error
+    global bot_started_at
+
+    logger.info(
+        "Initializing Telegram application..."
+    )
+
+    # -----------------------------------------------------
+    # INITIALIZE
+    # -----------------------------------------------------
+
+    await telegram_app.initialize()
+
+    # -----------------------------------------------------
+    # REMOVE OLD WEBHOOK
+    # -----------------------------------------------------
+
+    try:
+
+        await telegram_app.bot.delete_webhook(
+            drop_pending_updates=True
+        )
+
+        logger.info(
+            "Previous Telegram webhook removed."
+        )
+
+    except Exception:
+
+        logger.exception(
+            "Could not delete previous webhook."
+        )
+
+    # -----------------------------------------------------
+    # START APPLICATION
+    # -----------------------------------------------------
+
+    await telegram_app.start()
+
+    if telegram_app.updater is None:
+
+        raise RuntimeError(
+            "Telegram updater is unavailable."
+        )
+
+    # -----------------------------------------------------
+    # START POLLING
+    # -----------------------------------------------------
+
+    await telegram_app.updater.start_polling(
+
+        allowed_updates=Update.ALL_TYPES,
+
+        drop_pending_updates=True,
+
+        poll_interval=1.0,
+
+    )
+
+    bot_started_at = time.time()
+
+    bot_start_error = None
+
+    logger.info(
+        "========================================"
+    )
+
+    logger.info(
+        "Majed AI Music Bot is RUNNING"
+    )
+
+    logger.info(
+        "Telegram polling is ACTIVE"
+    )
+
+    logger.info(
+        "========================================"
+    )
+
 
 def run_bot():
 
@@ -2503,80 +2612,57 @@ def run_bot():
         bot_loop
     )
 
-    async def setup():
+    # -----------------------------------------------------
+    # START WITH RETRY
+    # -----------------------------------------------------
 
-        logger.info(
-            "Initializing Telegram application..."
-        )
+    retry_delay = 10
 
-        await telegram_app.initialize()
+    while True:
 
-        # -------------------------------------------------
-        # REMOVE ANY PREVIOUS WEBHOOK
-        # -------------------------------------------------
+        try:
 
-        await telegram_app.bot.delete_webhook(
-            drop_pending_updates=True
-        )
-
-        # -------------------------------------------------
-        # START APPLICATION
-        # -------------------------------------------------
-
-        await telegram_app.start()
-
-        if telegram_app.updater is None:
-
-            raise RuntimeError(
-                "Telegram updater is unavailable."
+            bot_loop.run_until_complete(
+                setup_bot()
             )
 
-        # -------------------------------------------------
-        # START POLLING
-        # -------------------------------------------------
+            # -------------------------------------------------
+            # BOT IS NOW RUNNING
+            # -------------------------------------------------
 
-        await telegram_app.updater.start_polling(
+            bot_loop.run_forever()
 
-            allowed_updates=Update.ALL_TYPES,
+            break
 
-            drop_pending_updates=True,
+        except Exception as exc:
 
-        )
+            bot_start_error = repr(
+                exc
+            )
 
-        logger.info(
-            "========================================"
-        )
+            logger.exception(
+                "BOT START FAILED"
+            )
 
-        logger.info(
-            "Majed AI Music Bot is RUNNING"
-        )
+            logger.error(
+                "Retrying Telegram bot in %s seconds...",
+                retry_delay,
+            )
 
-        logger.info(
-            "Telegram polling is ACTIVE"
-        )
+            # اگر مشکل موقتی بود، دوباره تلاش می‌کند
+            time.sleep(
+                retry_delay
+            )
 
-        logger.info(
-            "========================================"
-        )
+            retry_delay = min(
+                retry_delay * 2,
+                60,
+            )
 
-    try:
 
-        bot_loop.run_until_complete(
-            setup()
-        )
-
-        bot_loop.run_forever()
-
-    except Exception as exc:
-
-        bot_start_error = repr(
-            exc
-        )
-
-        logger.exception(
-            "BOT START FAILED"
-        )
-
+# =========================================================
+# START BOT THREAD
+# =========================================================
 
 bot_thread = threading.Thread(
 
@@ -2608,6 +2694,7 @@ def index():
 def health():
 
     polling_running = False
+    telegram_running = False
 
     try:
 
@@ -2622,12 +2709,34 @@ def health():
 
         polling_running = False
 
+    try:
+
+        telegram_running = bool(
+            telegram_app.running
+        )
+
+    except Exception:
+
+        telegram_running = False
+
+    uptime = None
+
+    if bot_started_at:
+
+        uptime = int(
+            time.time()
+            - bot_started_at
+        )
+
     return jsonify({
 
         "status": "ok",
 
+        "service":
+            "Majed AI Music Bot",
+
         "telegram_running":
-            telegram_app.running,
+            telegram_running,
 
         "polling_running":
             polling_running,
@@ -2637,6 +2746,9 @@ def health():
 
         "bot_start_error":
             bot_start_error,
+
+        "uptime_seconds":
+            uptime,
 
     }), 200
 
