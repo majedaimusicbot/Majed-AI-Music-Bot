@@ -21,14 +21,13 @@ app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
 
 async def start(update: Update, context):
-    # ساخت دکمه‌ها بر اساس لیست آهنگ‌ها
     keyboard = [
         [InlineKeyboardButton("❤️ سابسکرایب در یوتیوب", url=YOUTUBE_URL)]
     ]
     
-    # اضافه کردن دکمه برای هر آهنگ به صورت خودکار
     for song_id, song_info in SONGS.items():
-        keyboard.append([InlineKeyboardButton(f"✅ دریافت آهنگ: {song_info['title']}", callback_data=f"get_{song_id}")])
+        # دکمه با callback_data استاندارد
+        keyboard.append([InlineKeyboardButton(f"✅ دریافت آهنگ: {song_info['title']}", callback_data=song_id)])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
@@ -36,7 +35,6 @@ async def start(update: Update, context):
         reply_markup=reply_markup
     )
 
-# گرفتن فایل‌آیدی آهنگ‌های جدیدی که به ربات می‌فرستید
 async def get_file_id(update: Update, context):
     if update.message.audio:
         file_id = update.message.audio.file_id
@@ -46,21 +44,20 @@ async def button(update: Update, context):
     query = update.callback_query
     await query.answer()
     
-    if query.data.startswith("get_song_"):
-        song_id = query.data.replace("get_", "") # تبدیل به song_1
-        
-        if song_id in SONGS:
-            song_info = SONGS[song_id]
-            await query.message.reply_text(f"از حمایت شما سپاسگزاریم! 🎉 در حال ارسال {song_info['title']}...")
-            try:
-                await context.bot.send_audio(
-                    chat_id=query.message.chat_id,
-                    audio=song_info["file_id"],
-                    caption=f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
-                )
-            except Exception as e:
-                logging.error(f"Error sending audio: {e}")
-                await query.message.reply_text("خطا در ارسال فایل. لطفاً فایل‌آیدی را بررسی کنید.")
+    song_id = query.data # مستقیماً کلید مثل song_1 را می‌گیرد
+    
+    if song_id in SONGS:
+        song_info = SONGS[song_id]
+        await query.message.reply_text(f"از حمایت شما سپاسگزاریم! 🎉 در حال ارسال {song_info['title']}...")
+        try:
+            await context.bot.send_audio(
+                chat_id=query.message.chat_id,
+                audio=song_info["file_id"],
+                caption=f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
+            )
+        except Exception as e:
+            logging.error(f"Error sending audio: {e}")
+            await query.message.reply_text("خطا در ارسال فایل. لطفاً فایل‌آیدی را بررسی کنید.")
 
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.AUDIO, get_file_id))
