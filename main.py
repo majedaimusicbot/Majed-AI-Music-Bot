@@ -1,5 +1,6 @@
 import os
 import logging
+import json
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
@@ -8,12 +9,14 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 TOKEN = "8836665873:AAE7yM9_qhV6xgAv5VfnU3LDm-twXP910Ak"
 YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
+ADMIN_ID = 0  # اگر آیدی عددی تلگرام خود را دارید اینجا وارد کنید تا دسترسی ادمین داشته باشید
 
-# لیست آهنگ‌ها (برای اضافه کردن آهنگ‌های بعدی، کافی است به همین فرمت ادامه دهید)
+# ذخیره موقت آهنگ‌ها (در نسخه بعدی این را به فایل یا دیتابیس متصل می‌کنیم)
 SONGS = {
     "song_1": {
         "title": "🎵 بزن به سیم آخر",
-        "file_id": "CQACAgQAAxkBAAMTaqfErP0p4AKJQHX5yGTqz06TmiIAAg8iAAIRZEBR7jMYGeE6jE9BA"
+        "file_id": "CQACAgQAAxkBAAMTaqfErP0p4AKJQHX5yGTqz06TmiIAAg8iAAIRZEBR7jMYGeE6jE9BA",
+        "downloads": 0
     }
 }
 
@@ -22,17 +25,23 @@ application = Application.builder().token(TOKEN).build()
 
 async def start(update: Update, context):
     keyboard = [
-        [InlineKeyboardButton("❤️ سابسکرایب در یوتیوب", url=YOUTUBE_URL)]
+        [InlineKeyboardButton("❤️ سابسکرایب در یوتیوب (کلیک کنید)", url=YOUTUBE_URL)]
     ]
     
     for song_id, song_info in SONGS.items():
         keyboard.append([InlineKeyboardButton(f"✅ دریافت آهنگ: {song_info['title']}", callback_data=song_id)])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "برای دریافت فایل‌های صوتی، ابتدا روی دکمه‌ی بالا بزنید و کانال یوتیوب ما را سابسکرایب کنید، سپس روی دکمه‌ی دریافت آهنگ بزنید.",
-        reply_markup=reply_markup
+    
+    welcome_text = (
+        "✨ **به ربات اختصاصی کانال Deep House Farsi خوش آمدید!**\n\n"
+        "🎧 برای دریافت فایل صوتی آهنگ‌ها:\n"
+        "۱. ابتدا روی دکمه‌ی بالا بزنید و کانال یوتیوب ما را سابسکرایب کنید.\n"
+        "۲. سپس روی دکمه‌ی دریافت آهنگ مورد نظر خود بزنید تا لینک دانلود مستقیم برای شما ارسال شود.\n\n"
+        "🔥 از حمایت شما سپاسگزاریم!"
     )
+    
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
 
 async def get_file_id(update: Update, context):
     msg = update.message
@@ -45,17 +54,18 @@ async def get_file_id(update: Update, context):
     elif msg.voice:
         file_id = msg.voice.file_id
         file_type = "Voice"
-    elif msg.video:
-        file_id = msg.video.file_id
-        file_type = "Video"
     elif msg.document:
         file_id = msg.document.file_id
         file_type = "Document"
         
     if file_id:
-        await update.message.reply_text(f"📁 فایل‌آیدی این {file_type}:\n`{file_id}`", parse_mode="Markdown")
+        await update.message.reply_text(
+            f"📁 **فایل‌آیدی این {file_type}:**\n`{file_id}`\n\n"
+            f"💡 می‌توانید این کد را در بخش تنظیمات آهنگ‌های ربات قرار دهید.",
+            parse_mode="Markdown"
+        )
     else:
-        await update.message.reply_text("لطفاً یک فایل صوتی معتبر بفرستید.")
+        await update.message.reply_text("لطفاً یک فایل صوتی یا سند معتبر بفرستید تا فایل‌آیدی آن را دریافت کنید.")
 
 async def button(update: Update, context):
     query = update.callback_query
@@ -65,7 +75,9 @@ async def button(update: Update, context):
     
     if song_id in SONGS:
         song_info = SONGS[song_id]
-        await query.message.reply_text(f"از حمایت شما سپاسگزاریم! 🎉 در حال ارسال {song_info['title']}...")
+        SONGS[song_id]["downloads"] += 1  # افزایش آمار دانلود
+        
+        await query.message.reply_text(f"🎉 در حال آماده‌سازی و ارسال {song_info['title']}...")
         try:
             await context.bot.send_audio(
                 chat_id=query.message.chat_id,
@@ -74,15 +86,25 @@ async def button(update: Update, context):
             )
         except Exception as e:
             logging.error(f"Error sending audio: {e}")
-            await query.message.reply_text("خطا در ارسال فایل. لطفاً فایل‌آیدی را بررسی کنید.")
+            await query.message.reply_text("خطا در ارسال فایل. لطفاً به ادمین اطلاع دهید.")
+
+async def stats(update: Update, context):
+    # دستور آمار ساده
+    total_songs = len(SONGS)
+    stats_text = "📊 **آمار عملکرد ربات:**\n\n"
+    for song_id, info in SONGS.items():
+        stats_text += f"🎵 {info['title']}: {info['downloads']} بار دانلود\n"
+    
+    await update.message.reply_text(stats_text, parse_mode="Markdown")
 
 application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("stats", stats))
 application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, get_file_id))
 application.add_handler(CallbackQueryHandler(button))
 
 @app.route("/")
 def index():
-    return "Bot is alive!", 200
+    return "Bot is active and professional!", 200
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
