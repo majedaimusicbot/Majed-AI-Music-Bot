@@ -72,7 +72,9 @@ def init_bot_background():
     async def _setup():
         await application.initialize()
         await application.start()
-        # تنظیم خودکار وب‌هوک بر اساس دامنه رندر
+        # پردازش صف آپدیت‌ها برای دریافت پیام‌ها
+        asyncio.create_task(application.updater.start_polling()) if hasattr(application, 'updater') and application.updater else None
+        
         render_external_url = os.environ.get("RENDER_EXTERNAL_URL")
         if render_external_url:
             webhook_url = f"{render_external_url}/{TOKEN}"
@@ -203,7 +205,7 @@ async def button(update: Update, context):
                 ("send_document", lambda: context.bot.send_document(chat_id=chat_id, document=file_id, caption=caption))
             ]
             
-            sent = False
+            sent = false = False
             for method_name, send_func in send_tasks:
                 try:
                     await send_func()
