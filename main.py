@@ -57,6 +57,7 @@ if not ADMIN_ID_RAW:
 
 try:
     ADMIN_ID = int(ADMIN_ID_RAW)
+
 except ValueError:
     raise RuntimeError(
         "ADMIN_ID must be a numeric Telegram user ID."
@@ -97,7 +98,7 @@ app = Flask(__name__)
 
 
 # =========================================================
-# DATABASE
+# DATABASE FUNCTIONS
 # =========================================================
 
 def load_songs():
@@ -109,6 +110,7 @@ def load_songs():
         return {}
 
     try:
+
         with open(
             DB_FILE,
             "r",
@@ -128,6 +130,7 @@ def load_songs():
             return {}
 
     except Exception:
+
         logger.exception(
             "Could not read songs_db.json"
         )
@@ -346,6 +349,98 @@ def youtube_gate_text(song):
         "🔴 بعد به ربات برگرد و "
         "«انجام دادم» رو بزن."
     )
+
+
+# =========================================================
+# PER-SONG YOUTUBE CONFIRMATION
+# =========================================================
+#
+# هر کاربر برای هر آهنگ به صورت جداگانه تأیید می‌شود.
+#
+# مثال:
+#
+# Song A -> confirmed
+# Song B -> not confirmed
+#
+# در این حالت:
+# A مستقیم دانلود می‌شود
+# B دوباره هشدار Subscribe نشان می‌دهد
+#
+# =========================================================
+
+def get_confirmed_songs(context):
+
+    confirmed = context.user_data.get(
+        "youtube_confirmed_songs"
+    )
+
+    if not isinstance(
+        confirmed,
+        set,
+    ):
+
+        confirmed = set()
+
+        context.user_data[
+            "youtube_confirmed_songs"
+        ] = confirmed
+
+    return confirmed
+
+
+def is_song_confirmed(
+    context,
+    song_id,
+):
+
+    confirmed = get_confirmed_songs(
+        context
+    )
+
+    return song_id in confirmed
+
+
+def confirm_song(
+    context,
+    song_id,
+):
+
+    confirmed = get_confirmed_songs(
+        context
+    )
+
+    confirmed.add(
+        song_id
+    )
+
+
+# =========================================================
+# PROCESSING LOCK
+# =========================================================
+#
+# جلوگیری از این‌که کاربر چند بار پشت سرهم
+# روی دکمه "انجام دادم" کلیک کند.
+#
+# =========================================================
+
+def get_processing_songs(context):
+
+    processing = context.user_data.get(
+        "youtube_processing_songs"
+    )
+
+    if not isinstance(
+        processing,
+        set,
+    ):
+
+        processing = set()
+
+        context.user_data[
+            "youtube_processing_songs"
+        ] = processing
+
+    return processing
 
 
 # =========================================================
@@ -1877,12 +1972,12 @@ async def button(
         ]
 
         # =================================================
-        # ALREADY CONFIRMED
+        # ALREADY CONFIRMED FOR THIS SONG
         # =================================================
 
-        if context.user_data.get(
-            "youtube_confirmed",
-            False,
+        if is_song_confirmed(
+            context,
+            song_id,
         ):
 
             keyboard = InlineKeyboardMarkup([
@@ -1923,7 +2018,7 @@ async def button(
 
                 f"🎵 {song['title']}\n\n"
 
-                "❤️ دسترسی دانلود شما فعال است.\n\n"
+                "❤️ دسترسی دانلود این آهنگ فعال است.\n\n"
 
                 "برای دریافت فایل روی دانلود بزن.",
 
@@ -1934,7 +2029,7 @@ async def button(
             return
 
         # =================================================
-        # YOUTUBE GATE
+        # NEW / NOT CONFIRMED SONG
         # =================================================
 
         await query.message.edit_text(
@@ -1974,31 +2069,122 @@ async def button(
 
             return
 
-        # -------------------------------------------------
-        # HONOR SYSTEM
-        # -------------------------------------------------
-        # Telegram/YouTube subscription is NOT actually
-        # verified. User confirmation is accepted.
+        # =================================================
+        # ALREADY CONFIRMED
+        # =================================================
 
-        context.user_data[
-            "youtube_confirmed"
-        ] = True
-
-        await query.message.edit_text(
-
-            "🎉 ممنون از حمایتت ❤️\n\n"
-
-            "🎧 آهنگ در حال ارسال است..."
-
-        )
-
-        await send_song(
-
-            query,
+        if is_song_confirmed(
             context,
             song_id,
+        ):
 
+            await query.message.edit_text(
+
+                "✅ این آهنگ قبلاً برای شما فعال شده است.\n\n"
+                "🎧 در حال ارسال آهنگ..."
+
+            )
+
+            await send_song(
+
+                query,
+                context,
+                song_id,
+
+            )
+
+            return
+
+        # =================================================
+        # PREVENT DOUBLE CLICK
+        # =================================================
+
+        processing = get_processing_songs(
+            context
         )
+
+        if song_id in processing:
+
+            await query.answer(
+                "⏳ درخواست شما در حال پردازش است...",
+                show_alert=False,
+            )
+
+            return
+
+        processing.add(
+            song_id
+        )
+
+        try:
+
+            # ---------------------------------------------
+            # USER-FRIENDLY CHECKING SCREEN
+            # ---------------------------------------------
+
+            await query.message.edit_text(
+
+                "⏳ در حال بررسی عضویت..."
+
+            )
+
+            # ---------------------------------------------
+            # 3 SECOND DELAY
+            # ---------------------------------------------
+
+            await asyncio.sleep(
+                3
+            )
+
+            # ---------------------------------------------
+            # HONOR SYSTEM
+            # ---------------------------------------------
+            #
+            # در این نسخه عضویت YouTube واقعاً بررسی
+            # نمی‌شود. بعد از 3 ثانیه تأیید کاربر پذیرفته
+            # می‌شود.
+            #
+            # ---------------------------------------------
+
+            confirm_song(
+                context,
+                song_id,
+            )
+
+            await query.message.edit_text(
+
+                "🎉 ممنون از حمایتت ❤️\n\n"
+
+                "🎧 آهنگ در حال ارسال است..."
+
+            )
+
+            await send_song(
+
+                query,
+                context,
+                song_id,
+
+            )
+
+        except Exception:
+
+            logger.exception(
+                "YouTube confirmation flow failed"
+            )
+
+            await query.message.edit_text(
+
+                "❌ مشکلی در پردازش درخواست پیش آمد.\n\n"
+                "لطفاً دوباره تلاش کن."
+
+            )
+
+        finally:
+
+            processing.discard(
+                song_id
+            )
 
         return
 
@@ -2015,18 +2201,22 @@ async def button(
             1,
         )[1]
 
-        if not context.user_data.get(
-            "youtube_confirmed",
-            False,
+        if song_id not in SONGS:
+
+            await query.message.edit_text(
+                "❌ آهنگ پیدا نشد."
+            )
+
+            return
+
+        # =================================================
+        # CHECK PER-SONG CONFIRMATION
+        # =================================================
+
+        if not is_song_confirmed(
+            context,
+            song_id,
         ):
-
-            if song_id not in SONGS:
-
-                await query.message.edit_text(
-                    "❌ آهنگ پیدا نشد."
-                )
-
-                return
 
             song = SONGS[
                 song_id
@@ -2047,6 +2237,10 @@ async def button(
             )
 
             return
+
+        # =================================================
+        # DIRECT DOWNLOAD
+        # =================================================
 
         await send_song(
 
@@ -2165,7 +2359,7 @@ def run_bot():
         await telegram_app.initialize()
 
         # -------------------------------------------------
-        # Remove any previous webhook
+        # REMOVE ANY PREVIOUS WEBHOOK
         # -------------------------------------------------
 
         await telegram_app.bot.delete_webhook(
@@ -2173,7 +2367,7 @@ def run_bot():
         )
 
         # -------------------------------------------------
-        # Start application
+        # START APPLICATION
         # -------------------------------------------------
 
         await telegram_app.start()
@@ -2185,7 +2379,7 @@ def run_bot():
             )
 
         # -------------------------------------------------
-        # Start polling
+        # START POLLING
         # -------------------------------------------------
 
         await telegram_app.updater.start_polling(
