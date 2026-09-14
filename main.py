@@ -2,6 +2,7 @@ import os
 import logging
 import json
 import uuid
+import asyncio
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
@@ -18,7 +19,6 @@ if not admin_id_env:
     raise ValueError("خطا: متغیر محیطی ADMIN_ID تنظیم نشده است.")
 ADMIN_ID = int(admin_id_env)
 
-# آدرس رندر شما
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
 
 YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
@@ -150,7 +150,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     query = update.callback_query
     await query.answer()
-    
     data = query.data
     
     if data == "main_menu":
@@ -293,11 +292,21 @@ telegram_app.add_handler(CommandHandler("stats", stats))
 telegram_app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL | filters.TEXT & ~filters.COMMAND, handle_media))
 telegram_app.add_handler(CallbackQueryHandler(button))
 
-@app.before_first_request
-def setup_webhook():
+# تنظیم وب‌هوک به محض بالا آمدن سرور
+with app.app_context():
     if RENDER_EXTERNAL_URL:
         webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/webhook"
-        telegram_app.bot.set_webhook(url=webhook_url)
+        # تنظیم وب‌هوک به صورت همگام یا از طریق لوپ رویداد
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        async def set_wh():
+            await telegram_app.bot.set_webhook(url=webhook_url)
+        
+        loop.run_until_complete(set_wh())
         logging.info(f"Webhook set to: {webhook_url}")
 
 @app.route("/", methods=["GET"])
@@ -310,8 +319,6 @@ def webhook():
         json_string = request.get_data().decode("utf-8")
         update = Update.de_json(json_string, telegram_app.bot)
         
-        # اجرای ناهمگام آپدیت‌ها در لوپ برنامه
-        import asyncio
         loop = asyncio.get_event_loop()
         if loop.is_running():
             asyncio.run_coroutine_threadsafe(telegram_app.process_update(update), loop)
