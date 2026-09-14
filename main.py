@@ -352,21 +352,106 @@ def youtube_gate_text(song):
 
 
 # =========================================================
-# PER-SONG YOUTUBE CONFIRMATION
+# SECOND WARNING
+# =========================================================
+
+def youtube_second_warning_text(song):
+
+    return (
+        "⚠️ هنوز Subscribe نکردی!\n\n"
+
+        "🔴 اول عضو شو، "
+        "بعد دوباره «انجام دادم» رو بزن."
+    )
+
+
+# =========================================================
+# PER-SONG CONFIRMATION
 # =========================================================
 #
-# هر کاربر برای هر آهنگ به صورت جداگانه تأیید می‌شود.
+# برای هر آهنگ تعداد دفعات زدن دکمه جداگانه ذخیره می‌شود.
 #
-# مثال:
+# روند:
 #
-# Song A -> confirmed
-# Song B -> not confirmed
+# بار اول:
+#   هشدار کوتاه
 #
-# در این حالت:
-# A مستقیم دانلود می‌شود
-# B دوباره هشدار Subscribe نشان می‌دهد
+# بار دوم:
+#   دوباره هشدار کوتاه
+#
+# بار سوم:
+#   بررسی عضویت + 3 ثانیه تأخیر + ارسال
 #
 # =========================================================
+
+def get_confirmation_attempts(context):
+
+    attempts = context.user_data.get(
+        "youtube_confirmation_attempts"
+    )
+
+    if not isinstance(
+        attempts,
+        dict,
+    ):
+
+        attempts = {}
+
+        context.user_data[
+            "youtube_confirmation_attempts"
+        ] = attempts
+
+    return attempts
+
+
+def get_song_attempts(
+    context,
+    song_id,
+):
+
+    attempts = get_confirmation_attempts(
+        context
+    )
+
+    try:
+
+        return int(
+            attempts.get(
+                song_id,
+                0,
+            )
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        return 0
+
+
+def increment_song_attempts(
+    context,
+    song_id,
+):
+
+    attempts = get_confirmation_attempts(
+        context
+    )
+
+    current = get_song_attempts(
+        context,
+        song_id,
+    )
+
+    current += 1
+
+    attempts[
+        song_id
+    ] = current
+
+    return current
+
 
 def get_confirmed_songs(context):
 
@@ -416,11 +501,6 @@ def confirm_song(
 
 # =========================================================
 # PROCESSING LOCK
-# =========================================================
-#
-# جلوگیری از این‌که کاربر چند بار پشت سرهم
-# روی دکمه "انجام دادم" کلیک کند.
-#
 # =========================================================
 
 def get_processing_songs(context):
@@ -2080,8 +2160,8 @@ async def button(
 
             await query.message.edit_text(
 
-                "✅ این آهنگ قبلاً برای شما فعال شده است.\n\n"
-                "🎧 در حال ارسال آهنگ..."
+                "🎧 این آهنگ قبلاً برای شما فعال شده.\n\n"
+                "در حال ارسال آهنگ..."
 
             )
 
@@ -2096,7 +2176,7 @@ async def button(
             return
 
         # =================================================
-        # PREVENT DOUBLE CLICK
+        # PROCESSING LOCK
         # =================================================
 
         processing = get_processing_songs(
@@ -2112,6 +2192,79 @@ async def button(
 
             return
 
+        # =================================================
+        # COUNT THIS CLICK
+        # =================================================
+
+        attempts = increment_song_attempts(
+            context,
+            song_id,
+        )
+
+        # =================================================
+        # CLICK 1
+        # =================================================
+        #
+        # بار اول:
+        # فقط هشدار کوتاه نشان داده می‌شود.
+        #
+        # =================================================
+
+        if attempts == 1:
+
+            await query.message.edit_text(
+
+                youtube_second_warning_text(
+                    SONGS[song_id]
+                ),
+
+                reply_markup=(
+                    youtube_gate_keyboard(
+                        song_id
+                    )
+                ),
+
+            )
+
+            return
+
+        # =================================================
+        # CLICK 2
+        # =================================================
+        #
+        # بار دوم:
+        # دوباره همان هشدار کوتاه.
+        #
+        # =================================================
+
+        if attempts == 2:
+
+            await query.message.edit_text(
+
+                youtube_second_warning_text(
+                    SONGS[song_id]
+                ),
+
+                reply_markup=(
+                    youtube_gate_keyboard(
+                        song_id
+                    )
+                ),
+
+            )
+
+            return
+
+        # =================================================
+        # CLICK 3
+        # =================================================
+        #
+        # بار سوم:
+        # بررسی عضویت + سه ثانیه تأخیر
+        # سپس ارسال آهنگ.
+        #
+        # =================================================
+
         processing.add(
             song_id
         )
@@ -2119,7 +2272,7 @@ async def button(
         try:
 
             # ---------------------------------------------
-            # USER-FRIENDLY CHECKING SCREEN
+            # CHECKING SCREEN
             # ---------------------------------------------
 
             await query.message.edit_text(
@@ -2140,8 +2293,8 @@ async def button(
             # HONOR SYSTEM
             # ---------------------------------------------
             #
-            # در این نسخه عضویت YouTube واقعاً بررسی
-            # نمی‌شود. بعد از 3 ثانیه تأیید کاربر پذیرفته
+            # عضویت YouTube در این نسخه واقعاً بررسی
+            # نمی‌شود و پس از مرحله تأیید کاربر پذیرفته
             # می‌شود.
             #
             # ---------------------------------------------
