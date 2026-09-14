@@ -154,7 +154,7 @@ async def handle_media(update: Update, context):
             
             await update.message.reply_text(
                 f"🎉 آهنگ جدید با موفقیت اضافه شد!\n\nعنوان: {title}\nکد: `{song_id}`",
-                parse_Mode="Markdown"
+                parse_mode="Markdown"
             )
         else:
             await update.message.reply_text(
@@ -237,7 +237,7 @@ async def stats(update: Update, context):
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("add", add_song_command))
 application.add_handler(CommandHandler("stats", stats))
-application.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.DOCUMENT, handle_media))
+application.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL, handle_media))
 application.add_handler(CallbackQueryHandler(button))
 
 @app.route("/")
