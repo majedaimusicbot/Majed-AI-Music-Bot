@@ -2,6 +2,7 @@ import os
 import logging
 import json
 import uuid
+from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
@@ -17,9 +18,14 @@ if not admin_id_env:
     raise ValueError("خطا: متغیر محیطی ADMIN_ID تنظیم نشده است.")
 ADMIN_ID = int(admin_id_env)
 
+# آدرس رندر شما
+RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
+
 YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
 DB_FILE = "songs_db.json"
 PAGE_SIZE = 10
+
+app = Flask(__name__)
 
 def load_songs():
     if os.path.exists(DB_FILE):
@@ -279,20 +285,41 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(stats_text)
 
-def main():
-    application = Application.builder().token(TOKEN).build()
+# راه‌اندازی اپلیکیشن تلگرام
+telegram_app = Application.builder().token(TOKEN).build()
+telegram_app.add_handler(CommandHandler("start", start))
+telegram_app.add_handler(CommandHandler("add", add_song_command))
+telegram_app.add_handler(CommandHandler("stats", stats))
+telegram_app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL | filters.TEXT & ~filters.COMMAND, handle_media))
+telegram_app.add_handler(CallbackQueryHandler(button))
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("add", add_song_command))
-    application.add_handler(CommandHandler("stats", stats))
-    application.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL | filters.TEXT & ~filters.COMMAND, handle_media))
-    application.add_handler(CallbackQueryHandler(button))
+@app.before_first_request
+def setup_webhook():
+    if RENDER_EXTERNAL_URL:
+        webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/webhook"
+        telegram_app.bot.set_webhook(url=webhook_url)
+        logging.info(f"Webhook set to: {webhook_url}")
 
-    # پاک کردن وب‌هوک قبلی برای جلوگیری از تداخل
-    application.bot.delete_webhook(drop_pending_updates=True)
+@app.route("/", methods=["GET"])
+def index():
+    return "Bot is running!", 200
 
-    logging.info("Starting bot in polling mode...")
-    application.run_polling()
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    if request.headers.get("content-type") == "application/json":
+        json_string = request.get_data().decode("utf-8")
+        update = Update.de_json(json_string, telegram_app.bot)
+        
+        # اجرای ناهمگام آپدیت‌ها در لوپ برنامه
+        import asyncio
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.run_coroutine_threadsafe(telegram_app.process_update(update), loop)
+        else:
+            loop.run_until_complete(telegram_app.process_update(update))
+            
+        return "OK", 200
+    return "Invalid request", 403
 
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
