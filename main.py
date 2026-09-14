@@ -9,28 +9,27 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = "8836665873:AAE7yM9_qhV6xgAv5VfnU3LDm-twXP910Ak"
 YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
 
-# لیست آهنگ‌های شما (هر آهنگ جدیدی خواستید اضافه کنید، کافی است نام و file_id آن را اینجا بنویسید)
+# لیست آهنگ‌ها (برای اضافه کردن آهنگ جدید، کافی است مثل زیر اضافه کنید)
 SONGS = {
     "song_1": {
         "title": "🎵 بزن به سیم آخر",
         "file_id": "CQACAgQAAxkBAAMTaqfErP0p4AKJQHX5yGTqz06TmiIAAg8iAAIRZEBR7jMYGeE6jE9BA"
     }
-    # برای اضافه کردن آهنگ بعدی، کافی است به این شکل اضافه کنید:
-    # "song_2": {
-    #     "title": "🎵 نام آهنگ دوم",
-    #     "file_id": "FILE_ID_NEW_SONG"
-    # }
 }
 
 app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
 
 async def start(update: Update, context):
-    # ساخت دکمه‌های شیشه‌ای برای لیست آهنگ‌ها یا دریافت آهنگ اصلی
+    # ساخت دکمه‌ها بر اساس لیست آهنگ‌ها
     keyboard = [
-        [InlineKeyboardButton("❤️ سابسکرایب در یوتیوب", url=YOUTUBE_URL)],
-        [InlineKeyboardButton("✅ دریافت آهنگ: بزن به سیم آخر", callback_data="get_song_1")]
+        [InlineKeyboardButton("❤️ سابسکرایب در یوتیوب", url=YOUTUBE_URL)]
     ]
+    
+    # اضافه کردن دکمه برای هر آهنگ به صورت خودکار
+    for song_id, song_info in SONGS.items():
+        keyboard.append([InlineKeyboardButton(f"✅ دریافت آهنگ: {song_info['title']}", callback_data=f"get_{song_id}")])
+
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
         "برای دریافت فایل‌های صوتی، ابتدا روی دکمه‌ی بالا بزنید و کانال یوتیوب ما را سابسکرایب کنید، سپس روی دکمه‌ی دریافت آهنگ بزنید.",
@@ -47,11 +46,8 @@ async def button(update: Update, context):
     query = update.callback_query
     await query.answer()
     
-    # بررسی اینکه کاربر کدام آهنگ را درخواست کرده است
     if query.data.startswith("get_song_"):
-        song_key = query.data # مثلاً get_song_1
-        # استخراج کلید آهنگ از کلالبک
-        song_id = song_key.replace("get_song_", "song_")
+        song_id = query.data.replace("get_", "") # تبدیل به song_1
         
         if song_id in SONGS:
             song_info = SONGS[song_id]
@@ -60,11 +56,11 @@ async def button(update: Update, context):
                 await context.bot.send_audio(
                     chat_id=query.message.chat_id,
                     audio=song_info["file_id"],
-                    caption=f"{song_info['title']} \n\n🔗 کانال ما: @DeepHouse_Farsi"
+                    caption=f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
                 )
             except Exception as e:
                 logging.error(f"Error sending audio: {e}")
-                await query.message.reply_text("خطا در ارسال فایل. لطفاً بررسی کنید.")
+                await query.message.reply_text("خطا در ارسال فایل. لطفاً فایل‌آیدی را بررسی کنید.")
 
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.AUDIO, get_file_id))
