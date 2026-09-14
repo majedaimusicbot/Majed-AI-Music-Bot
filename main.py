@@ -1,5 +1,6 @@
 import os
 import logging
+import json
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
@@ -9,19 +10,38 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = "8836665873:AAE7yM9_qhV6xgAv5VfnU3LDm-twXP910Ak"
 YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
 
-# لیست آهنگ‌های شما (برای اضافه کردن آهنگ‌های بعدی، کافی است song_2، song_3 و... را اینجا اضافه کنید)
-SONGS = {
-    "song_1": {
-        "title": "🎵 بزن به سیم آخر",
-        "file_id": "CQACAgQAAxkBAAMTaqfErP0p4AKJQHX5yGTqz06TmiIAAg8iAAIRZEBR7jMYGeE6jE9BA",
-        "downloads": 0
+# فایل برای ذخیره دائمی آهنگ‌ها روی هاست (تا با ری‌استارت پاک نشوند)
+DB_FILE = "songs_db.json"
+
+def load_songs():
+    if os.path.exists(DB_FILE):
+        try:
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    # آهنگ پیش‌فرض اولیه
+    return {
+        "song_1": {
+            "title": "🎵 بزن به سیم آخر",
+            "file_id": "CQACAgQAAxkBAAMTaqfErP0p4AKJQHX5yGTqz06TmiIAAg8iAAIRZEBR7jMYGeE6jE9BA",
+            "downloads": 0
+        }
     }
-}
+
+def save_songs(songs):
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(songs, f, ensure_ascii=False, indent=4)
+
+SONGS = load_songs()
 
 app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
 
 async def start(update: Update, context):
+    global SONGS
+    SONGS = load_songs()
+    
     keyboard = [
         [InlineKeyboardButton("❤️ سابسکرایب در یوتیوب", url=YOUTUBE_URL)]
     ]
@@ -38,31 +58,58 @@ async def start(update: Update, context):
     )
     await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
 
-async def get_file_id(update: Update, context):
+async def add_song_command(update: Update, context):
+    # دستور برای اضافه کردن: /add نام آهنگ
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ برای اضافه کردن آهنگ جدید، دستور را به این شکل بفرستید:\n"
+            "`/add نام آهنگ`\n(و فایل صوتی را همراه آن یا به صورت ریپلای بفرستید)",
+            parse_mode="Markdown"
+        )
+        return
+    
+    song_title = "🎵 " + " ".join(context.args)
+    context.user_data['pending_title'] = song_title
+    await update.message.reply_text(f"✅ عنوان «{song_title}» ثبت شد.\nحالا فایل صوتی این آهنگ را از گوشیتان به ربات بفرستید.")
+
+async def handle_media(update: Update, context):
+    global SONGS
     msg = update.message
     file_id = None
-    file_type = "نامشخص"
     
     if msg.audio:
         file_id = msg.audio.file_id
-        file_type = "Audio"
     elif msg.voice:
         file_id = msg.voice.file_id
-        file_type = "Voice"
     elif msg.document:
         file_id = msg.document.file_id
-        file_type = "Document"
-        
+
     if file_id:
-        await update.message.reply_text(
-            f"📁 **فایل‌آیدی این {file_type}:**\n`{file_id}`\n\n"
-            f"برای اضافه کردن آهنگ جدید، می‌توانید از این فایل‌آیدی استفاده کنید.",
-            parse_mode="Markdown"
-        )
-    else:
-        await update.message.reply_text("لطفاً یک فایل صوتی معتبر بفرستید.")
+        # اگر عنوانی از قبل با دستور /add ثبت شده باشد، آهنگ جدید را اضافه می‌کند
+        if 'pending_title' in context.user_data:
+            title = context.user_data.pop('pending_title')
+            song_id = f"song_{len(SONGS) + 1}"
+            
+            SONGS[song_id] = {
+                "title": title,
+                "file_id": file_id,
+                "downloads": 0
+            }
+            save_songs(SONGS)
+            
+            await update.message.reply_text(f"🎉 آهنگ جدید با موفقیت به ربات اضافه شد و به منوی کاربران رفت!\n\nعنوان: {title}\nکد: `{song_id}`", parse_mode="Markdown")
+        else:
+            # اگر دستوری نزده بود، فقط فایل‌آیدی را می‌دهد که کارتان راحت باشد
+            await update.message.reply_text(
+                f"📁 فایل‌آیدی:\n`{file_id}`\n\n"
+                f"برای اضافه کردن این آهنگ به منوی ربات، کافی است بنویسید:\n`/add نام آهنگ`",
+                parse_mode="Markdown"
+            )
 
 async def button(update: Update, context):
+    global SONGS
+    SONGS = load_songs()
+    
     query = update.callback_query
     await query.answer()
     
@@ -88,6 +135,7 @@ async def button(update: Update, context):
         if song_id in SONGS:
             song_info = SONGS[song_id]
             SONGS[song_id]["downloads"] += 1
+            save_songs(SONGS)
             
             await query.message.reply_text(f"🎉 ممنون از حمایت شما! در حال ارسال {song_info['title']}...")
             
@@ -95,7 +143,6 @@ async def button(update: Update, context):
             file_id = song_info["file_id"]
             caption = f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
             
-            # ارسال با حالت مطمئن (ابتدا صوت، اگر نشد به عنوان فایل سند/document می‌فرستد تا خطا ندهد)
             sent = False
             for send_method in [
                 lambda: context.bot.send_audio(chat_id=chat_id, audio=file_id, caption=caption),
@@ -109,9 +156,12 @@ async def button(update: Update, context):
                     continue
             
             if not sent:
-                await query.message.reply_text("خطا در ارسال فایل. لطفاً فایل‌آیدی جدیدی از طریق ربات ثبت کنید.")
+                await query.message.reply_text("خطا در ارسال فایل. لطفاً دوباره تلاش کنید.")
 
 async def stats(update: Update, context):
+    global SONGS
+    SONGS = load_songs()
+    
     total_songs = len(SONGS)
     stats_text = f"📊 **آمار ربات Deep House Farsi**\n\n🎵 کل آهنگ‌ها: {total_songs}\n\n"
     for song_id, info in SONGS.items():
@@ -120,8 +170,9 @@ async def stats(update: Update, context):
     await update.message.reply_text(stats_text, parse_mode="Markdown")
 
 application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("add", add_song_command))
 application.add_handler(CommandHandler("stats", stats))
-application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, get_file_id))
+application.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.DOCUMENT, handle_media))
 application.add_handler(CallbackQueryHandler(button))
 
 @app.route("/")
