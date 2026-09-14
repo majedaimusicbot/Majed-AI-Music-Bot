@@ -9,7 +9,7 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = "8836665873:AAE7yM9_qhV6xgAv5VfnU3LDm-twXP910Ak"
 YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
 
-# لیست آهنگ‌ها
+# در اینجا آهنگ‌ها را با نوع فایل ذخیره می‌کنیم
 SONGS = {
     "song_1": {
         "title": "🎵 بزن به سیم آخر",
@@ -35,7 +35,6 @@ async def start(update: Update, context):
     )
 
 async def get_file_id(update: Update, context):
-    # گرفتن فایل‌آیدی از هر نوع فایلی (صوتی، ویدیو، سند و...)
     msg = update.message
     file_id = None
     file_type = "نامشخص"
@@ -52,11 +51,14 @@ async def get_file_id(update: Update, context):
     elif msg.document:
         file_id = msg.document.file_id
         file_type = "Document"
+    elif msg.video_note:
+        file_id = msg.video_note.file_id
+        file_type = "VideoNote"
         
     if file_id:
         await update.message.reply_text(f"📁 فایل‌آیدی این {file_type}:\n`{file_id}`", parse_mode="Markdown")
     else:
-        await update.message.reply_text("لطفاً یک فایل صوتی یا ویدیو بفرستید.")
+        await update.message.reply_text("لطفاً یک فایل معتبر بفرستید.")
 
 async def button(update: Update, context):
     query = update.callback_query
@@ -67,25 +69,29 @@ async def button(update: Update, context):
     if song_id in SONGS:
         song_info = SONGS[song_id]
         await query.message.reply_text(f"از حمایت شما سپاسگزاریم! 🎉 در حال ارسال {song_info['title']}...")
-        try:
-            # ارسال امن فایل بدون توجه به نوع فرمت (صوتی یا ویدیو)
-            await context.bot.send_document(
-                chat_id=query.message.chat_id,
-                document=song_info["file_id"],
-                caption=f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
-            )
-        except Exception as e:
-            logging.error(f"Error sending file: {e}")
-            # اگر سند نشد، به عنوان ویدیو تست کند
+        
+        file_id = song_info["file_id"]
+        chat_id = query.message.chat_id
+        caption = f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
+        
+        # تلاش هوشمند برای ارسال با توجه به انواع مختلف متدهای تلگرام
+        sent = False
+        for send_func in [
+            lambda: context.bot.send_audio(chat_id=chat_id, audio=file_id, caption=caption),
+            lambda: context.bot.send_video(chat_id=chat_id, video=file_id, caption=caption),
+            lambda: context.bot.send_document(chat_id=chat_id, document=file_id, caption=caption),
+            lambda: context.bot.send_voice(chat_id=chat_id, voice=file_id, caption=caption),
+            lambda: context.bot.send_video_note(chat_id=chat_id, video_note=file_id)
+        ]:
             try:
-                await context.bot.send_video(
-                    chat_id=query.message.chat_id,
-                    video=song_info["file_id"],
-                    caption=f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
-                )
-            except Exception as e2:
-                logging.error(f"Error sending video: {e2}")
-                await query.message.reply_text("خطا در ارسال فایل. لطفاً فایل را به صورت صوتی استاندارد (MP3) دوباره به ربات بفرستید تا فایل‌آیدی جدید بگیرید.")
+                await send_func()
+                sent = True
+                break
+            except Exception:
+                continue
+                
+        if not sent:
+            await query.message.reply_text("خطا در ارسال فایل. لطفاً یک فایل‌آیدی جدید بفرستید.")
 
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, get_file_id))
