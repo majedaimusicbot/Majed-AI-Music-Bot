@@ -97,16 +97,18 @@ app = Flask(__name__)
 
 
 # =========================================================
-# DATABASE FUNCTIONS
+# DATABASE
 # =========================================================
 
 def load_songs():
+    """
+    Load songs from songs_db.json.
+    """
 
     if not os.path.exists(DB_FILE):
         return {}
 
     try:
-
         with open(
             DB_FILE,
             "r",
@@ -126,7 +128,6 @@ def load_songs():
             return {}
 
     except Exception:
-
         logger.exception(
             "Could not read songs_db.json"
         )
@@ -135,6 +136,9 @@ def load_songs():
 
 
 def save_songs(songs):
+    """
+    Save songs safely.
+    """
 
     tmp_file = DB_FILE + ".tmp"
 
@@ -212,7 +216,10 @@ def get_total_downloads():
                 )
             )
 
-        except (TypeError, ValueError):
+        except (
+            TypeError,
+            ValueError,
+        ):
 
             continue
 
@@ -277,7 +284,6 @@ def main_menu_text():
     total_downloads = get_total_downloads()
 
     return (
-
         "✨ به Majed AI Music خوش آمدید\n\n"
 
         "🎧 آرشیو اختصاصی موسیقی\n"
@@ -290,52 +296,27 @@ def main_menu_text():
 
         "اگر موسیقی‌های ما رو دوست داری، "
         "با یک Subscribe رایگان از ما حمایت کن. 🔴"
-
     )
 
 
 # =========================================================
-# YOUTUBE SUBSCRIBE GATE
+# YOUTUBE GATE
 # =========================================================
 
-def youtube_gate_keyboard(
-    song_id,
-    warning=False,
-):
-
-    if warning:
-
-        subscribe_text = (
-            "🔴 دوباره Subscribe در یوتیوب ❤️"
-        )
-
-        confirm_text = (
-            "✅ انجام دادم — دوباره بررسی کن"
-        )
-
-    else:
-
-        subscribe_text = (
-            "🔴 Subscribe در یوتیوب ❤️"
-        )
-
-        confirm_text = (
-            "✅ انجام دادم — دریافت آهنگ"
-        )
-
+def youtube_gate_keyboard(song_id):
 
     return InlineKeyboardMarkup([
 
         [
             InlineKeyboardButton(
-                subscribe_text,
+                "🔴 Subscribe در یوتیوب ❤️",
                 url=YOUTUBE_URL,
             )
         ],
 
         [
             InlineKeyboardButton(
-                confirm_text,
+                "✅ انجام دادم — دریافت آهنگ",
                 callback_data=(
                     f"youtube_confirm_{song_id}"
                 ),
@@ -355,38 +336,15 @@ def youtube_gate_keyboard(
 def youtube_gate_text(song):
 
     return (
-
-        "❤️ یک حمایت کوچک برای دریافت آهنگ\n\n"
-
-        f"🎵 {song['title']}\n\n"
-
-        "اگر از موسیقی‌های ما خوشت میاد، "
-        "لطفاً با یک Subscribe رایگان "
-        "در یوتیوب از ما حمایت کن. 🎧\n\n"
-
-        "🔥 حمایت تو کمک می‌کنه آهنگ‌های "
-        "بیشتری تولید کنیم.\n\n"
-
-        "👇 اول Subscribe کن، بعد برگرد "
-        "و روی «انجام دادم» بزن."
-
-    )
-
-
-def youtube_warning_text(song):
-
-    return (
-
-        "⚠️ هنوز یک مرحله باقی مانده\n\n"
+        "🚨⚠️ فقط یک مرحله تا دریافت آهنگ باقی مانده\n\n"
 
         f"🎵 {song['title']}\n\n"
 
-        "اگر هنوز در یوتیوب Subscribe نکردی، "
-        "لطفاً اول این کار رو انجام بده. ❤️\n\n"
+        "اگر هنوز Subscribe نکردی، "
+        "اول در یوتیوب عضو شو. ❤️\n\n"
 
-        "بعد دوباره روی دکمه "
-        "«انجام دادم» بزن تا ادامه بدی."
-
+        "🔴 بعد به ربات برگرد و "
+        "«انجام دادم» رو بزن."
     )
 
 
@@ -450,11 +408,9 @@ def archive_menu(page=0):
 
     total = len(items)
 
-
     if total == 0:
 
         return (
-
             "📂 آرشیو آهنگ‌ها در حال حاضر خالی است.",
 
             InlineKeyboardMarkup([
@@ -467,15 +423,12 @@ def archive_menu(page=0):
                 ]
 
             ]),
-
         )
-
 
     max_page = (
         (total - 1)
         // PAGE_SIZE
     )
-
 
     page = max(
         0,
@@ -484,7 +437,6 @@ def archive_menu(page=0):
             max_page,
         ),
     )
-
 
     start = (
         page
@@ -496,11 +448,11 @@ def archive_menu(page=0):
         + PAGE_SIZE
     )
 
+    page_items = items[start:end]
 
     keyboard = []
 
-
-    for song_id, info in items[start:end]:
+    for song_id, info in page_items:
 
         title = str(
             info.get(
@@ -508,7 +460,6 @@ def archive_menu(page=0):
                 "آهنگ بدون نام",
             )
         )
-
 
         keyboard.append([
 
@@ -519,9 +470,7 @@ def archive_menu(page=0):
 
         ])
 
-
     navigation = []
-
 
     if page > 0:
 
@@ -536,7 +485,6 @@ def archive_menu(page=0):
 
         )
 
-
     navigation.append(
 
         InlineKeyboardButton(
@@ -545,7 +493,6 @@ def archive_menu(page=0):
         )
 
     )
-
 
     if end < total:
 
@@ -560,11 +507,9 @@ def archive_menu(page=0):
 
         )
 
-
     keyboard.append(
         navigation
     )
-
 
     keyboard.append([
 
@@ -575,20 +520,14 @@ def archive_menu(page=0):
 
     ])
 
-
     text = (
-
         "🎵 آرشیو آهنگ‌های Majed AI Music\n\n"
 
         f"🎧 آهنگ‌ها: {total}\n"
-
-        f"📄 صفحه {page + 1} از "
-        f"{max_page + 1}\n\n"
+        f"📄 صفحه {page + 1} از {max_page + 1}\n\n"
 
         "👇 آهنگ موردنظرت رو انتخاب کن:"
-
     )
-
 
     return (
         text,
@@ -610,18 +549,13 @@ async def start(
     if not update.message:
         return
 
-
     context.user_data[
         "waiting_for_search"
     ] = False
 
-
     await update.message.reply_text(
-
         main_menu_text(),
-
         reply_markup=main_menu(),
-
     )
 
 
@@ -640,7 +574,6 @@ async def admin_command(
     ):
         return
 
-
     if (
         update.effective_user.id
         != ADMIN_ID
@@ -652,16 +585,14 @@ async def admin_command(
 
         return
 
-
     context.user_data[
         "waiting_for_search"
     ] = False
 
-
     await update.message.reply_text(
 
         "🛠 پنل مدیریت Majed AI Music\n\n"
-        "از گزینه‌های زیر استفاده کنید:",
+        "از گزینه‌های زیر استفاده کن:",
 
         reply_markup=admin_menu(),
 
@@ -683,7 +614,6 @@ async def add_song_command(
     ):
         return
 
-
     if (
         update.effective_user.id
         != ADMIN_ID
@@ -695,7 +625,6 @@ async def add_song_command(
 
         return
 
-
     if not context.args:
 
         await update.message.reply_text(
@@ -704,7 +633,7 @@ async def add_song_command(
 
             "/add نام آهنگ\n\n"
 
-            "سپس فایل صوتی آهنگ را ارسال کنید.\n\n"
+            "سپس فایل صوتی آهنگ را ارسال کن.\n\n"
 
             "مثال:\n"
             "/add بزن به سیم آخر"
@@ -713,7 +642,6 @@ async def add_song_command(
 
         return
 
-
     title = (
         "🎵 "
         + " ".join(
@@ -721,18 +649,16 @@ async def add_song_command(
         )
     )
 
-
     context.user_data[
         "pending_title"
     ] = title
-
 
     await update.message.reply_text(
 
         f"✅ عنوان ثبت شد:\n\n"
         f"{title}\n\n"
 
-        "🎧 حالا فایل صوتی آهنگ را ارسال کنید."
+        "🎧 حالا فایل صوتی آهنگ را ارسال کن."
 
     )
 
@@ -748,7 +674,6 @@ async def cancel_command(
 
     if not update.message:
         return
-
 
     context.user_data.pop(
         "pending_title",
@@ -780,7 +705,6 @@ async def delete_song_command(
     ):
         return
 
-
     if (
         update.effective_user.id
         != ADMIN_ID
@@ -791,7 +715,6 @@ async def delete_song_command(
         )
 
         return
-
 
     if not context.args:
 
@@ -808,17 +731,14 @@ async def delete_song_command(
 
         return
 
-
     song_id = (
         context.args[0]
         .strip()
     )
 
-
     global SONGS
 
     SONGS = load_songs()
-
 
     if song_id not in SONGS:
 
@@ -828,14 +748,12 @@ async def delete_song_command(
 
         return
 
-
     title = SONGS[
         song_id
     ].get(
         "title",
         "بدون نام",
     )
-
 
     del SONGS[
         song_id
@@ -844,7 +762,6 @@ async def delete_song_command(
     save_songs(
         SONGS
     )
-
 
     await update.message.reply_text(
 
@@ -871,7 +788,6 @@ async def rename_song_command(
     ):
         return
 
-
     if (
         update.effective_user.id
         != ADMIN_ID
@@ -882,7 +798,6 @@ async def rename_song_command(
         )
 
         return
-
 
     if len(context.args) < 2:
 
@@ -899,9 +814,7 @@ async def rename_song_command(
 
         return
 
-
     song_id = context.args[0]
-
 
     new_title = (
         "🎵 "
@@ -910,11 +823,9 @@ async def rename_song_command(
         )
     )
 
-
     global SONGS
 
     SONGS = load_songs()
-
 
     if song_id not in SONGS:
 
@@ -924,7 +835,6 @@ async def rename_song_command(
 
         return
 
-
     old_title = SONGS[
         song_id
     ].get(
@@ -932,18 +842,15 @@ async def rename_song_command(
         "بدون نام",
     )
 
-
     SONGS[
         song_id
     ][
         "title"
     ] = new_title
 
-
     save_songs(
         SONGS
     )
-
 
     await update.message.reply_text(
 
@@ -971,7 +878,6 @@ async def stats(
     ):
         return
 
-
     if (
         update.effective_user.id
         != ADMIN_ID
@@ -983,11 +889,9 @@ async def stats(
 
         return
 
-
     global SONGS
 
     SONGS = load_songs()
-
 
     total_songs = len(
         SONGS
@@ -996,7 +900,6 @@ async def stats(
     total_downloads = (
         get_total_downloads()
     )
-
 
     sorted_songs = sorted(
 
@@ -1013,23 +916,16 @@ async def stats(
 
     )
 
-
     lines = [
 
         "📊 گزارش کامل Majed AI Music",
-
         "",
-
         f"🎧 تعداد آهنگ‌ها: {total_songs}",
-
         f"📥 مجموع دانلودها: {total_downloads}",
-
         "",
-
         "🔥 پربازدیدترین آهنگ‌ها:",
-
+        "",
     ]
-
 
     for index, (
         _,
@@ -1049,7 +945,6 @@ async def stats(
             )
         )
 
-
         downloads = int(
             info.get(
                 "downloads",
@@ -1057,21 +952,12 @@ async def stats(
             )
         )
 
-
         lines.append(
-
-            f"{index}. {title} — "
-            f"{downloads} دانلود"
-
+            f"{index}. {title} — {downloads} دانلود"
         )
-
 
     await update.message.reply_text(
-
-        "\n".join(
-            lines
-        )
-
+        "\n".join(lines)
     )
 
 
@@ -1086,18 +972,15 @@ async def handle_message(
 
     global SONGS
 
-
     if (
         not update.message
         or not update.effective_user
     ):
         return
 
-
     user_id = (
         update.effective_user.id
     )
-
 
     # =====================================================
     # USER SEARCH
@@ -1113,12 +996,10 @@ async def handle_message(
                 "waiting_for_search"
             ] = False
 
-
             query_text = (
                 update.message.text
                 or ""
             ).strip()
-
 
             if not query_text:
 
@@ -1128,12 +1009,9 @@ async def handle_message(
 
                 return
 
-
             SONGS = load_songs()
 
-
             matched = []
-
 
             for song_id, info in SONGS.items():
 
@@ -1143,7 +1021,6 @@ async def handle_message(
                         "",
                     )
                 )
-
 
                 if (
                     query_text.casefold()
@@ -1157,9 +1034,7 @@ async def handle_message(
                         )
                     )
 
-
             keyboard = []
-
 
             for song_id, info in matched[:10]:
 
@@ -1182,7 +1057,6 @@ async def handle_message(
 
                 ])
 
-
             keyboard.append([
 
                 InlineKeyboardButton(
@@ -1191,7 +1065,6 @@ async def handle_message(
                 )
 
             ])
-
 
             if matched:
 
@@ -1216,7 +1089,6 @@ async def handle_message(
 
                 )
 
-
             await update.message.reply_text(
 
                 text,
@@ -1229,9 +1101,7 @@ async def handle_message(
 
             )
 
-
         return
-
 
     # =====================================================
     # ADMIN MEDIA
@@ -1240,7 +1110,6 @@ async def handle_message(
     msg = update.message
 
     file_id = None
-
 
     if msg.audio:
 
@@ -1260,10 +1129,8 @@ async def handle_message(
             msg.document.file_id
         )
 
-
     if not file_id:
         return
-
 
     if (
         "pending_title"
@@ -1274,7 +1141,7 @@ async def handle_message(
 
             "📁 فایل دریافت شد.\n\n"
 
-            "برای ثبت آهنگ ابتدا بنویسید:\n\n"
+            "برای ثبت آهنگ ابتدا بنویس:\n\n"
 
             "/add نام آهنگ"
 
@@ -1282,17 +1149,13 @@ async def handle_message(
 
         return
 
-
     title = context.user_data.pop(
         "pending_title"
     )
 
-
     SONGS = load_songs()
 
-
     song_id = uuid.uuid4().hex[:8]
-
 
     SONGS[song_id] = {
 
@@ -1304,18 +1167,15 @@ async def handle_message(
 
     }
 
-
     save_songs(
         SONGS
     )
-
 
     await msg.reply_text(
 
         "🎉 آهنگ با موفقیت اضافه شد!\n\n"
 
         f"🎵 {title}\n"
-
         f"🆔 شناسه: {song_id}\n\n"
 
         "✅ آهنگ اکنون داخل آرشیو قرار گرفت."
@@ -1337,7 +1197,6 @@ async def send_song(
 
     SONGS = load_songs()
 
-
     if song_id not in SONGS:
 
         await query.message.edit_text(
@@ -1346,34 +1205,28 @@ async def send_song(
 
         return
 
-
     song = SONGS[
         song_id
     ]
 
-
     file_id = song.get(
         "file_id"
     )
-
 
     if not file_id:
 
         await query.message.edit_text(
 
             "❌ فایل این آهنگ ثبت نشده است.\n\n"
-
             "لطفاً به ادمین اطلاع دهید."
 
         )
 
         return
 
-
     chat_id = (
         query.message.chat_id
     )
-
 
     await query.message.edit_text(
 
@@ -1381,7 +1234,6 @@ async def send_song(
         f"{song['title']} ..."
 
     )
-
 
     caption = (
 
@@ -1392,9 +1244,7 @@ async def send_song(
 
     )
 
-
     sent = False
-
 
     # =====================================================
     # AUDIO
@@ -1414,13 +1264,11 @@ async def send_song(
 
         sent = True
 
-
     except Exception:
 
         logger.exception(
             "send_audio failed"
         )
-
 
     # =====================================================
     # DOCUMENT FALLBACK
@@ -1442,13 +1290,11 @@ async def send_song(
 
             sent = True
 
-
         except Exception:
 
             logger.exception(
                 "send_document failed"
             )
-
 
     # =====================================================
     # SUCCESS
@@ -1474,11 +1320,9 @@ async def send_song(
 
         )
 
-
         save_songs(
             SONGS
         )
-
 
         await context.bot.send_message(
 
@@ -1520,7 +1364,6 @@ async def send_song(
 
         )
 
-
     else:
 
         await context.bot.send_message(
@@ -1549,32 +1392,23 @@ async def button(
 
     global SONGS
 
-
-    query = (
-        update.callback_query
-    )
-
+    query = update.callback_query
 
     if not query:
         return
 
-
     await query.answer()
 
-
     SONGS = load_songs()
-
 
     data = (
         query.data
         or ""
     )
 
-
     user_id = (
         query.from_user.id
     )
-
 
     # =====================================================
     # NOOP
@@ -1582,7 +1416,6 @@ async def button(
 
     if data == "noop":
         return
-
 
     # =====================================================
     # MAIN MENU
@@ -1594,7 +1427,6 @@ async def button(
             "waiting_for_search"
         ] = False
 
-
         await query.message.edit_text(
 
             main_menu_text(),
@@ -1605,7 +1437,6 @@ async def button(
 
         return
 
-
     # =====================================================
     # ADMIN ADD
     # =====================================================
@@ -1614,7 +1445,6 @@ async def button(
 
         if user_id != ADMIN_ID:
             return
-
 
         await query.message.edit_text(
 
@@ -1643,7 +1473,6 @@ async def button(
 
         return
 
-
     # =====================================================
     # ADMIN MENU
     # =====================================================
@@ -1652,7 +1481,6 @@ async def button(
 
         if user_id != ADMIN_ID:
             return
-
 
         await query.message.edit_text(
 
@@ -1666,7 +1494,6 @@ async def button(
 
         return
 
-
     # =====================================================
     # ADMIN STATS
     # =====================================================
@@ -1676,9 +1503,7 @@ async def button(
         if user_id != ADMIN_ID:
             return
 
-
         SONGS = load_songs()
-
 
         top = sorted(
 
@@ -1695,25 +1520,16 @@ async def button(
 
         )
 
-
         lines = [
 
             "📊 آمار ربات",
-
             "",
-
-            f"🎧 تعداد آهنگ‌ها: "
-            f"{len(SONGS)}",
-
-            f"📥 مجموع دانلودها: "
-            f"{get_total_downloads()}",
-
+            f"🎧 تعداد آهنگ‌ها: {len(SONGS)}",
+            f"📥 مجموع دانلودها: {get_total_downloads()}",
             "",
-
             "🔥 پربازدیدترین‌ها:",
-
+            "",
         ]
-
 
         for index, info in enumerate(
             top[:5],
@@ -1728,7 +1544,6 @@ async def button(
                 f"{int(info.get('downloads', 0))}"
 
             )
-
 
         await query.message.edit_text(
 
@@ -1758,7 +1573,6 @@ async def button(
 
         return
 
-
     # =====================================================
     # ADMIN SONG LIST
     # =====================================================
@@ -1768,9 +1582,7 @@ async def button(
         if user_id != ADMIN_ID:
             return
 
-
         SONGS = load_songs()
-
 
         if not SONGS:
 
@@ -1782,13 +1594,9 @@ async def button(
         else:
 
             lines = [
-
                 "🎵 لیست آهنگ‌های ثبت‌شده:",
-
                 "",
-
             ]
-
 
             for song_id, info in SONGS.items():
 
@@ -1797,7 +1605,6 @@ async def button(
                     "بدون نام",
                 )
 
-
                 downloads = int(
                     info.get(
                         "downloads",
@@ -1805,21 +1612,17 @@ async def button(
                     )
                 )
 
-
                 lines.append(
 
                     f"🎵 {title}\n"
-
                     f"🆔 {song_id} | "
                     f"📥 {downloads}\n"
 
                 )
 
-
             text = "\n".join(
                 lines
             )
-
 
         await query.message.edit_text(
 
@@ -1828,12 +1631,10 @@ async def button(
             reply_markup=InlineKeyboardMarkup([
 
                 [
-
                     InlineKeyboardButton(
                         "🔙 پنل مدیریت",
                         callback_data="admin_menu",
                     )
-
                 ]
 
             ]),
@@ -1841,7 +1642,6 @@ async def button(
         )
 
         return
-
 
     # =====================================================
     # ADMIN HELP
@@ -1851,7 +1651,6 @@ async def button(
 
         if user_id != ADMIN_ID:
             return
-
 
         text = (
 
@@ -1875,7 +1674,6 @@ async def button(
 
         )
 
-
         await query.message.edit_text(
 
             text,
@@ -1897,7 +1695,6 @@ async def button(
 
         return
 
-
     # =====================================================
     # ARCHIVE
     # =====================================================
@@ -1917,11 +1714,9 @@ async def button(
 
             page = 0
 
-
         text, markup = (
             archive_menu(page)
         )
-
 
         await query.message.edit_text(
 
@@ -1933,7 +1728,6 @@ async def button(
 
         return
 
-
     # =====================================================
     # SEARCH
     # =====================================================
@@ -1943,7 +1737,6 @@ async def button(
         context.user_data[
             "waiting_for_search"
         ] = True
-
 
         await query.message.edit_text(
 
@@ -1969,7 +1762,6 @@ async def button(
 
         return
 
-
     # =====================================================
     # LATEST SONGS
     # =====================================================
@@ -1980,14 +1772,11 @@ async def button(
             SONGS.items()
         )
 
-
         latest = (
             items[-10:][::-1]
         )
 
-
         keyboard = []
-
 
         for song_id, info in latest:
 
@@ -2010,7 +1799,6 @@ async def button(
 
             ])
 
-
         keyboard.append([
 
             InlineKeyboardButton(
@@ -2019,7 +1807,6 @@ async def button(
             )
 
         ])
-
 
         if latest:
 
@@ -2038,7 +1825,6 @@ async def button(
                 "🔥 هنوز آهنگی اضافه نشده است."
             )
 
-
         await query.message.edit_text(
 
             text,
@@ -2051,7 +1837,6 @@ async def button(
 
         return
 
-
     # =====================================================
     # SELECT SONG
     # =====================================================
@@ -2062,7 +1847,6 @@ async def button(
             "_",
             1,
         )[1]
-
 
         if song_id not in SONGS:
 
@@ -2088,14 +1872,12 @@ async def button(
 
             return
 
-
         song = SONGS[
             song_id
         ]
 
-
         # =================================================
-        # ALREADY PASSED GATE
+        # ALREADY CONFIRMED
         # =================================================
 
         if context.user_data.get(
@@ -2137,7 +1919,6 @@ async def button(
 
             ])
 
-
             await query.message.edit_text(
 
                 f"🎵 {song['title']}\n\n"
@@ -2152,9 +1933,8 @@ async def button(
 
             return
 
-
         # =================================================
-        # FIRST TIME
+        # YOUTUBE GATE
         # =================================================
 
         await query.message.edit_text(
@@ -2173,7 +1953,6 @@ async def button(
 
         return
 
-
     # =====================================================
     # YOUTUBE CONFIRM
     # =====================================================
@@ -2187,7 +1966,6 @@ async def button(
             2,
         )[2]
 
-
         if song_id not in SONGS:
 
             await query.message.edit_text(
@@ -2196,74 +1974,23 @@ async def button(
 
             return
 
-
-        song = SONGS[
-            song_id
-        ]
-
-
-        attempts = int(
-            context.user_data.get(
-                "youtube_attempts",
-                0,
-            )
-        )
-
-
-        # =================================================
-        # FIRST CLICK → WARNING
-        # =================================================
-
-        if attempts == 0:
-
-            context.user_data[
-                "youtube_attempts"
-            ] = 1
-
-
-            await query.message.edit_text(
-
-                youtube_warning_text(
-                    song
-                ),
-
-                reply_markup=(
-                    youtube_gate_keyboard(
-                        song_id,
-                        warning=True,
-                    )
-                ),
-
-            )
-
-            return
-
-
-        # =================================================
-        # SECOND CLICK → ACCESS
-        # =================================================
-
-        # Honor System:
-        # YouTube subscription is NOT actually verified.
-
-        context.user_data[
-            "youtube_attempts"
-        ] = attempts + 1
-
+        # -------------------------------------------------
+        # HONOR SYSTEM
+        # -------------------------------------------------
+        # Telegram/YouTube subscription is NOT actually
+        # verified. User confirmation is accepted.
 
         context.user_data[
             "youtube_confirmed"
         ] = True
 
-
         await query.message.edit_text(
 
             "🎉 ممنون از حمایتت ❤️\n\n"
 
-            "آهنگ در حال ارسال است... 🎧"
+            "🎧 آهنگ در حال ارسال است..."
 
         )
-
 
         await send_song(
 
@@ -2274,7 +2001,6 @@ async def button(
         )
 
         return
-
 
     # =====================================================
     # DOWNLOAD
@@ -2289,7 +2015,6 @@ async def button(
             1,
         )[1]
 
-
         if not context.user_data.get(
             "youtube_confirmed",
             False,
@@ -2303,11 +2028,9 @@ async def button(
 
                 return
 
-
             song = SONGS[
                 song_id
             ]
-
 
             await query.message.edit_text(
 
@@ -2324,7 +2047,6 @@ async def button(
             )
 
             return
-
 
         await send_song(
 
@@ -2348,14 +2070,12 @@ telegram_app.add_handler(
     )
 )
 
-
 telegram_app.add_handler(
     CommandHandler(
         "admin",
         admin_command,
     )
 )
-
 
 telegram_app.add_handler(
     CommandHandler(
@@ -2364,14 +2084,12 @@ telegram_app.add_handler(
     )
 )
 
-
 telegram_app.add_handler(
     CommandHandler(
         "delete",
         delete_song_command,
     )
 )
-
 
 telegram_app.add_handler(
     CommandHandler(
@@ -2380,7 +2098,6 @@ telegram_app.add_handler(
     )
 )
 
-
 telegram_app.add_handler(
     CommandHandler(
         "stats",
@@ -2388,14 +2105,12 @@ telegram_app.add_handler(
     )
 )
 
-
 telegram_app.add_handler(
     CommandHandler(
         "cancel",
         cancel_command,
     )
 )
-
 
 telegram_app.add_handler(
 
@@ -2415,7 +2130,6 @@ telegram_app.add_handler(
 
 )
 
-
 telegram_app.add_handler(
     CallbackQueryHandler(
         button,
@@ -2427,9 +2141,7 @@ telegram_app.add_handler(
 # BOT LOOP
 # =========================================================
 
-bot_loop = (
-    asyncio.new_event_loop()
-)
+bot_loop = asyncio.new_event_loop()
 
 bot_thread = None
 
@@ -2440,11 +2152,9 @@ def run_bot():
 
     global bot_start_error
 
-
     asyncio.set_event_loop(
         bot_loop
     )
-
 
     async def setup():
 
@@ -2452,18 +2162,15 @@ def run_bot():
             "Initializing Telegram application..."
         )
 
-
         await telegram_app.initialize()
 
-
         # -------------------------------------------------
-        # Remove old webhook
+        # Remove any previous webhook
         # -------------------------------------------------
 
         await telegram_app.bot.delete_webhook(
             drop_pending_updates=True
         )
-
 
         # -------------------------------------------------
         # Start application
@@ -2471,13 +2178,11 @@ def run_bot():
 
         await telegram_app.start()
 
-
         if telegram_app.updater is None:
 
             raise RuntimeError(
                 "Telegram updater is unavailable."
             )
-
 
         # -------------------------------------------------
         # Start polling
@@ -2490,7 +2195,6 @@ def run_bot():
             drop_pending_updates=True,
 
         )
-
 
         logger.info(
             "========================================"
@@ -2508,16 +2212,13 @@ def run_bot():
             "========================================"
         )
 
-
     try:
 
         bot_loop.run_until_complete(
             setup()
         )
 
-
         bot_loop.run_forever()
-
 
     except Exception as exc:
 
@@ -2540,7 +2241,6 @@ bot_thread = threading.Thread(
 
 )
 
-
 bot_thread.start()
 
 
@@ -2562,7 +2262,6 @@ def health():
 
     polling_running = False
 
-
     try:
 
         polling_running = bool(
@@ -2575,7 +2274,6 @@ def health():
     except Exception:
 
         polling_running = False
-
 
     return jsonify({
 
