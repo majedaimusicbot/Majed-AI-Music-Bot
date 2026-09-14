@@ -1,356 +1,923 @@
 import os
-import logging
 import json
 import uuid
 import asyncio
+import logging
 import threading
+
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+)
 
-# تنظیمات لاگینگ
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+# =========================
+# Logging
+# =========================
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# =========================
+# Environment
+# =========================
 
 TOKEN = os.environ.get("BOT_TOKEN")
-if not TOKEN:
-    raise ValueError("خطا: متغیر محیطی BOT_TOKEN تنظیم نشده است.")
-
-admin_id_env = os.environ.get("ADMIN_ID")
-if not admin_id_env:
-    raise ValueError("خطا: متغیر محیطی ADMIN_ID تنظیم نشده است.")
-ADMIN_ID = int(admin_id_env)
-
+ADMIN_ID_RAW = os.environ.get("ADMIN_ID")
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
 
-YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
+if not TOKEN:
+    raise RuntimeError("BOT_TOKEN تنظیم نشده است.")
+
+if not ADMIN_ID_RAW:
+    raise RuntimeError("ADMIN_ID تنظیم نشده است.")
+
+try:
+    ADMIN_ID = int(ADMIN_ID_RAW)
+except ValueError:
+    raise RuntimeError("ADMIN_ID باید عدد باشد.")
+
+
+# =========================
+# Settings
+# =========================
+
+YOUTUBE_URL = (
+    "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
+)
+
 DB_FILE = "songs_db.json"
 PAGE_SIZE = 10
 
+
+# =========================
+# Flask
+# =========================
+
 app = Flask(__name__)
 
+
+# =========================
+# Database
+# =========================
+
 def load_songs():
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r", encoding="utf-8") as f:
-                content = f.read().strip()
-                if not content:
-                    return {}
-                return json.loads(content)
-        except Exception as e:
-            logging.error(f"Error reading {DB_FILE}: {e}")
-    return {}
+    if not os.path.exists(DB_FILE):
+        return {}
+
+    try:
+        with open(DB_FILE, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+
+        if not content:
+            return {}
+
+        data = json.loads(content)
+
+        if not isinstance(data, dict):
+            logger.error("songs_db.json باید یک object باشد.")
+            return {}
+
+        return data
+
+    except Exception:
+        logger.exception("خطا هنگام خواندن songs_db.json")
+        return {}
+
 
 def save_songs(songs):
     try:
-        with open(DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(songs, f, ensure_ascii=False, indent=4)
-    except Exception as e:
-        logging.error(f"Error saving to {DB_FILE}: {e}")
+        temp_file = DB_FILE + ".tmp"
+
+        with open(temp_file, "w", encoding="utf-8") as f:
+            json.dump(
+                songs,
+                f,
+                ensure_ascii=False,
+                indent=4,
+            )
+
+        os.replace(temp_file, DB_FILE)
+
+    except Exception:
+        logger.exception("خطا هنگام ذخیره songs_db.json")
+
 
 SONGS = load_songs()
 
-def get_main_menu_markup():
+
+# =========================
+# Main Menu
+# =========================
+
+def main_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("❤️ عضویت در یوتیوب", url=YOUTUBE_URL)],
-        [InlineKeyboardButton("🎵 آرشیو آهنگ‌ها", callback_data="archive_0")],
-        [InlineKeyboardButton("🔎 جستجوی آهنگ", callback_data="search_start"),
-         InlineKeyboardButton("🔥 جدیدترین آهنگ‌ها", callback_data="latest_songs")]
+        [
+            InlineKeyboardButton(
+                "❤️ عضویت در کانال یوتیوب",
+                url=YOUTUBE_URL,
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🎵 آرشیو آهنگ‌ها",
+                callback_data="archive_0",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🔎 جستجوی آهنگ",
+                callback_data="search_start",
+            ),
+            InlineKeyboardButton(
+                "🔥 جدیدترین‌ها",
+                callback_data="latest",
+            ),
+        ],
     ])
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_text = (
-        "✨ به Deep House Farsi خوش آمدید\n\n"
-        "🎧 آرشیو اختصاصی آهنگ‌های ما\n"
-        "برای دریافت آهنگ موردنظر، از گزینه‌های زیر استفاده کنید ❤️"
-    )
-    if update.message:
-        await update.message.reply_text(welcome_text, reply_markup=get_main_menu_markup())
 
-async def add_song_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id != ADMIN_ID:
-        await update.message.reply_text("شما دسترسی مدیریتی ندارید.")
+def back_button():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "🔙 بازگشت به منوی اصلی",
+                callback_data="main_menu",
+            )
+        ]
+    ])
+
+
+# =========================
+# /start
+# =========================
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    context.user_data["waiting_for_search"] = False
+
+    text = (
+        "✨ **به Deep House Farsi خوش آمدید** ✨\n\n"
+        "🎧 آرشیو اختصاصی موسیقی\n\n"
+        "از منوی زیر آهنگ موردنظرتان را انتخاب کنید:"
+    )
+
+    if update.message:
+        await update.message.reply_text(
+            text,
+            reply_markup=main_menu(),
+            parse_mode="Markdown",
+        )
+
+
+# =========================
+# /add
+# =========================
+
+async def add_song(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text(
+            "⛔ شما دسترسی مدیریتی ندارید."
+        )
         return
 
     if not context.args:
         await update.message.reply_text(
-            "⚠️ راهنمای افزودن آهنگ:\n"
-            "/add نام آهنگ\n(سپس فایل صوتی را ارسال کنید)"
+            "⚠️ روش افزودن آهنگ:\n\n"
+            "/add نام آهنگ\n\n"
+            "سپس فایل صوتی را ارسال کنید."
         )
         return
-    
-    song_title = "🎵 " + " ".join(context.args)
-    context.user_data['pending_title'] = song_title
-    await update.message.reply_text(f"✅ عنوان «{song_title}» ثبت شد.\nاکنون فایل صوتی یا موزیک‌ویدیو را بفرستید.")
 
-async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    title = "🎵 " + " ".join(context.args)
+
+    context.user_data["pending_title"] = title
+
+    await update.message.reply_text(
+        f"✅ عنوان ثبت شد:\n\n"
+        f"{title}\n\n"
+        f"حالا فایل صوتی آهنگ را ارسال کنید."
+    )
+
+
+# =========================
+# Media / Search Text
+# =========================
+
+async def handle_message(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+
     global SONGS
+
     user_id = update.effective_user.id
-    if user_id != ADMIN_ID:
-        if context.user_data.get('waiting_for_search'):
-            context.user_data['waiting_for_search'] = False
-            query_text = update.message.text.strip()
-            SONGS = load_songs()
-            
-            matched = []
-            for s_id, info in SONGS.items():
-                if query_text.lower() in info['title'].lower():
-                    matched.append((s_id, info))
-            
-            keyboard = []
-            for s_id, info in matched[:10]:
-                keyboard.append([InlineKeyboardButton(f"🎧 {info['title']}", callback_data=f"sel_{s_id}")])
-            keyboard.append([InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")])
-            
-            if matched:
-                await update.message.reply_text(
-                    f"🔎 نتایج جستجو برای: {query_text}\nتعداد یافت‌شده: {len(matched)}",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+
+    # -------------------------
+    # Search
+    # -------------------------
+
+    if (
+        update.message
+        and update.message.text
+        and user_id != ADMIN_ID
+        and context.user_data.get("waiting_for_search")
+    ):
+
+        context.user_data["waiting_for_search"] = False
+
+        search_text = update.message.text.strip().lower()
+
+        SONGS = load_songs()
+
+        results = []
+
+        for song_id, song in SONGS.items():
+
+            title = str(song.get("title", "")).lower()
+
+            if search_text in title:
+                results.append((song_id, song))
+
+        if not results:
+
+            await update.message.reply_text(
+                "❌ آهنگی با این نام پیدا نشد.",
+                reply_markup=back_button(),
+            )
+
+            return
+
+        keyboard = []
+
+        for song_id, song in results[:10]:
+
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"🎧 {song.get('title', 'بدون عنوان')}",
+                    callback_data=f"song_{song_id}",
                 )
-            else:
-                await update.message.reply_text(
-                    f"❌ هیچ آهنگی با عبارت «{query_text}» یافت نشد.",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")]])
-                )
+            ])
+
+        keyboard.append([
+            InlineKeyboardButton(
+                "🔙 منوی اصلی",
+                callback_data="main_menu",
+            )
+        ])
+
+        await update.message.reply_text(
+            f"🔎 **نتایج جستجو**\n\n"
+            f"تعداد نتایج: {len(results)}",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown",
+        )
+
         return
 
-    msg = update.message
+    # -------------------------
+    # Admin media
+    # -------------------------
+
+    if user_id != ADMIN_ID:
+        return
+
+    if not update.message:
+        return
+
+    message = update.message
+
     file_id = None
-    
-    if msg.audio:
-        file_id = msg.audio.file_id
-    elif msg.voice:
-        file_id = msg.voice.file_id
-    elif msg.document:
-        file_id = msg.document.file_id
 
-    if file_id:
-        if 'pending_title' in context.user_data:
-            title = context.user_data.pop('pending_title')
-            SONGS = load_songs()
-            song_id = uuid.uuid4().hex[:8]
-            
-            SONGS[song_id] = {
-                "title": title,
-                "file_id": file_id,
-                "downloads": 0
-            }
-            save_songs(SONGS)
-            
-            await update.message.reply_text(
-                f"🎉 آهنگ جدید با موفقیت ذخیره شد!\n\n🔹 عنوان: {title}\n🔹 شناسه: {song_id}"
-            )
-        else:
-            await update.message.reply_text(
-                f"📁 فایل‌آیدی دریافت شد:\n{file_id}\n\nبرای ثبت نهایی بنویسید:\n/add نام آهنگ"
-            )
+    if message.audio:
+        file_id = message.audio.file_id
 
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global SONGS
-    SONGS = load_songs()
-    
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    
-    if data == "main_menu":
-        context.user_data['waiting_for_search'] = False
-        await query.message.edit_text(
-            "✨ به Deep House Farsi خوش آمدید\n\n"
-            "🎧 آرشیو اختصاصی آهنگ‌های ما\n"
-            "برای دریافت آهنگ موردنظر، از گزینه‌های زیر استفاده کنید ❤️",
-            reply_markup=get_main_menu_markup()
-        )
+    elif message.voice:
+        file_id = message.voice.file_id
 
-    elif data.startswith("archive_"):
-        page = int(data.split("_")[1])
-        song_items = list(SONGS.items())
-        total_songs = len(song_items)
-        max_page = (total_songs - 1) // PAGE_SIZE if total_songs > 0 else 0
-        
-        start_idx = page * PAGE_SIZE
-        end_idx = start_idx + PAGE_SIZE
-        page_items = song_items[start_idx:end_idx]
-        
-        keyboard = []
-        for s_id, info in page_items:
-            keyboard.append([InlineKeyboardButton(f"🎧 {info['title']}", callback_data=f"sel_{s_id}")])
-        
-        nav_buttons = []
-        if page > 0:
-            nav_buttons.append(InlineKeyboardButton("⬅️ صفحه قبل", callback_data=f"archive_{page - 1}"))
-        nav_buttons.append(InlineKeyboardButton(f"📄 {page + 1} / {max_page + 1}", callback_data="noop"))
-        if end_idx < total_songs:
-            nav_buttons.append(InlineKeyboardButton("صفحه بعد ➡️", callback_data=f"archive_{page + 1}"))
-        
-        if nav_buttons:
-            keyboard.append(nav_buttons)
-        
-        keyboard.append([InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")])
-        
-        if total_songs == 0:
-            text = "📂 آرشیو آهنگ‌ها در حال حاضر خالی است."
-        else:
-            text = f"📂 آرشیوی از بهترین‌های Deep House\nصفحه {page + 1} از {max_page + 1}:"
+    elif message.document:
+        file_id = message.document.file_id
 
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif data == "search_start":
-        context.user_data['waiting_for_search'] = True
-        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")]])
-        await query.message.edit_text(
-            "🔎 جستجوی آهنگ\n\nلطفاً نام یا بخشی از نام آهنگ موردنظر خود را ارسال کنید:",
-            reply_markup=keyboard
-        )
-
-    elif data == "latest_songs":
-        song_items = list(SONGS.items())
-        latest = song_items[-10:][::-1]
-        
-        keyboard = []
-        for s_id, info in latest:
-            keyboard.append([InlineKeyboardButton(f"🔥 {info['title']}", callback_data=f"sel_{s_id}")])
-        keyboard.append([InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")])
-        
-        if not latest:
-            text = "🔥 هیچ آهنگ جدیدی یافت نشد."
-        else:
-            text = "🔥 جدیدترین آهنگ‌های اضافه شده:"
-
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif data == "noop":
-        pass
-
-    elif data.startswith("sel_"):
-        song_id = data.replace("sel_", "")
-        if song_id in SONGS:
-            song_info = SONGS[song_id]
-            keyboard = [
-                [InlineKeyboardButton("❤️ عضویت در یوتیوب", url=YOUTUBE_URL)],
-                [InlineKeyboardButton("✅ سابسکرایب کردم، دریافت فایل", callback_data=f"verify_{song_id}")],
-                [InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await query.message.edit_text(
-                f"⚠️ مرحله تایید سابسکرایب\n\n"
-                f"برای دریافت موزیک {song_info['title']}، لطفاً مطمئن شوید که کانال یوتیوب ما را سابسکرایب کرده‌اید و سپس روی دکمه تایید بزنید.",
-                reply_markup=reply_markup
-            )
-
-    elif data.startswith("verify_"):
-        song_id = data.replace("verify_", "")
-        if song_id in SONGS:
-            song_info = SONGS[song_id]
-            await query.message.edit_text(f"🎉 سپاس از حمایت شما!\nدر حال ارسال فایل {song_info['title']}...")
-            
-            chat_id = query.message.chat_id
-            file_id = song_info["file_id"]
-            caption = f"🎵 {song_info['title']}\n\n🔗 کانال رسمی ما: @DeepHouse_Farsi"
-            
-            sent = False
-            try:
-                await context.bot.send_audio(chat_id=chat_id, audio=file_id, caption=caption)
-                sent = True
-            except Exception as e:
-                logging.error(f"Failed to send audio: {e}")
-                try:
-                    await context.bot.send_document(chat_id=chat_id, document=file_id, caption=caption)
-                    sent = True
-                except Exception as e2:
-                    logging.error(f"Failed to send document: {e2}")
-            
-            if sent:
-                SONGS[song_id]["downloads"] += 1
-                save_songs(SONGS)
-                
-                back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")]])
-                await context.bot.send_message(chat_id=chat_id, text="👇 برای دریافت سایر آهنگ‌ها از منو استفاده کنید:", reply_markup=back_keyboard)
-            else:
-                await context.bot.send_message(chat_id=chat_id, text="❌ خطا در ارسال فایل. لطفاً به ادمین اطلاع دهید.")
-
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global SONGS
-    user_id = update.effective_user.id
-    if user_id != ADMIN_ID:
-        await update.message.reply_text("شما دسترسی مدیریتی ندارید.")
+    if not file_id:
         return
 
+    if "pending_title" not in context.user_data:
+
+        await message.reply_text(
+            "📁 فایل دریافت شد.\n\n"
+            "برای اضافه کردن آن ابتدا بنویسید:\n"
+            "/add نام آهنگ"
+        )
+
+        return
+
+    title = context.user_data.pop("pending_title")
+
     SONGS = load_songs()
-    total_songs = len(SONGS)
-    stats_text = f"📊 گزارش آمار ربات\n\n🎵 مجموع آهنگ‌ها: {total_songs}\n\n"
-    for song_id, info in SONGS.items():
-        stats_text += f"• {info['title']}: 📥 {info['downloads']} دانلود\n"
-    
-    await update.message.reply_text(stats_text)
 
-# تعریف ساختار واحد Application
-application = Application.builder().token(TOKEN).build()
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("add", add_song_command))
-application.add_handler(CommandHandler("stats", stats))
-application.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL | filters.TEXT & ~filters.COMMAND, handle_media))
-application.add_handler(CallbackQueryHandler(button))
+    song_id = uuid.uuid4().hex[:8]
 
-# راه‌اندازی Event Loop و مدیریت اجرای چرخه‌حیات پایتون-تلگرام-بات
+    SONGS[song_id] = {
+        "title": title,
+        "file_id": file_id,
+        "downloads": 0,
+    }
+
+    save_songs(SONGS)
+
+    await message.reply_text(
+        "🎉 **آهنگ با موفقیت اضافه شد!**\n\n"
+        f"🎵 عنوان: {title}\n"
+        f"🆔 شناسه: `{song_id}`",
+        parse_mode="Markdown",
+    )
+
+
+# =========================
+# Buttons
+# =========================
+
+async def button(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+
+    global SONGS
+
+    query = update.callback_query
+
+    await query.answer()
+
+    SONGS = load_songs()
+
+    data = query.data
+
+    # =========================
+    # Main Menu
+    # =========================
+
+    if data == "main_menu":
+
+        context.user_data["waiting_for_search"] = False
+
+        await query.message.edit_text(
+            "✨ **به Deep House Farsi خوش آمدید** ✨\n\n"
+            "🎧 آرشیو اختصاصی موسیقی\n\n"
+            "از منوی زیر آهنگ موردنظرتان را انتخاب کنید:",
+            reply_markup=main_menu(),
+            parse_mode="Markdown",
+        )
+
+        return
+
+    # =========================
+    # Archive
+    # =========================
+
+    if data.startswith("archive_"):
+
+        page = int(data.split("_")[1])
+
+        songs = list(SONGS.items())
+
+        total = len(songs)
+
+        if total == 0:
+
+            await query.message.edit_text(
+                "📂 آرشیو آهنگ‌ها فعلاً خالی است.",
+                reply_markup=back_button(),
+            )
+
+            return
+
+        total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
+
+        if page < 0:
+            page = 0
+
+        if page >= total_pages:
+            page = total_pages - 1
+
+        start_index = page * PAGE_SIZE
+        end_index = start_index + PAGE_SIZE
+
+        current_songs = songs[start_index:end_index]
+
+        keyboard = []
+
+        for song_id, song in current_songs:
+
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"🎧 {song.get('title', 'بدون عنوان')}",
+                    callback_data=f"song_{song_id}",
+                )
+            ])
+
+        navigation = []
+
+        if page > 0:
+
+            navigation.append(
+                InlineKeyboardButton(
+                    "⬅️ قبلی",
+                    callback_data=f"archive_{page - 1}",
+                )
+            )
+
+        navigation.append(
+            InlineKeyboardButton(
+                f"📄 {page + 1}/{total_pages}",
+                callback_data="noop",
+            )
+        )
+
+        if page < total_pages - 1:
+
+            navigation.append(
+                InlineKeyboardButton(
+                    "بعدی ➡️",
+                    callback_data=f"archive_{page + 1}",
+                )
+            )
+
+        keyboard.append(navigation)
+
+        keyboard.append([
+            InlineKeyboardButton(
+                "🔙 منوی اصلی",
+                callback_data="main_menu",
+            )
+        ])
+
+        await query.message.edit_text(
+            "📂 **آرشیو آهنگ‌ها**\n\n"
+            "آهنگ موردنظر را انتخاب کنید:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown",
+        )
+
+        return
+
+    # =========================
+    # Latest
+    # =========================
+
+    if data == "latest":
+
+        songs = list(SONGS.items())
+
+        latest = songs[-10:]
+        latest.reverse()
+
+        keyboard = []
+
+        for song_id, song in latest:
+
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"🔥 {song.get('title', 'بدون عنوان')}",
+                    callback_data=f"song_{song_id}",
+                )
+            ])
+
+        keyboard.append([
+            InlineKeyboardButton(
+                "🔙 منوی اصلی",
+                callback_data="main_menu",
+            )
+        ])
+
+        if not latest:
+
+            text = "🔥 هنوز آهنگی اضافه نشده است."
+
+        else:
+
+            text = "🔥 **جدیدترین آهنگ‌ها**\n\n"
+
+            text += "آخرین آهنگ‌های اضافه‌شده:"
+
+        await query.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown",
+        )
+
+        return
+
+    # =========================
+    # Search
+    # =========================
+
+    if data == "search_start":
+
+        context.user_data["waiting_for_search"] = True
+
+        await query.message.edit_text(
+            "🔎 **جستجوی آهنگ**\n\n"
+            "نام یا بخشی از نام آهنگ را ارسال کنید:",
+            reply_markup=back_button(),
+            parse_mode="Markdown",
+        )
+
+        return
+
+    # =========================
+    # Nothing
+    # =========================
+
+    if data == "noop":
+        return
+
+    # =========================
+    # Song Selected
+    # =========================
+
+    if data.startswith("song_"):
+
+        song_id = data.replace("song_", "", 1)
+
+        if song_id not in SONGS:
+
+            await query.message.edit_text(
+                "❌ این آهنگ دیگر وجود ندارد.",
+                reply_markup=back_button(),
+            )
+
+            return
+
+        song = SONGS[song_id]
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "❤️ عضویت در یوتیوب",
+                    url=YOUTUBE_URL,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "✅ سابسکرایب کردم؛ دریافت آهنگ",
+                    callback_data=f"verify_{song_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🔙 بازگشت",
+                    callback_data="main_menu",
+                )
+            ],
+        ])
+
+        await query.message.edit_text(
+            "🔐 **دریافت آهنگ**\n\n"
+            f"🎵 {song.get('title', 'بدون عنوان')}\n\n"
+            "1️⃣ ابتدا در کانال یوتیوب عضو شوید.\n"
+            "2️⃣ سپس روی دکمه «سابسکرایب کردم» بزنید.\n"
+            "3️⃣ فایل برای شما ارسال می‌شود.",
+            reply_markup=keyboard,
+            parse_mode="Markdown",
+        )
+
+        return
+
+    # =========================
+    # Verify / Download
+    # =========================
+
+    if data.startswith("verify_"):
+
+        song_id = data.replace("verify_", "", 1)
+
+        if song_id not in SONGS:
+
+            await query.message.edit_text(
+                "❌ این آهنگ پیدا نشد.",
+                reply_markup=back_button(),
+            )
+
+            return
+
+        song = SONGS[song_id]
+
+        title = song.get("title", "آهنگ")
+
+        file_id = song.get("file_id")
+
+        if not file_id:
+
+            await query.message.edit_text(
+                "❌ فایل این آهنگ در دسترس نیست.",
+                reply_markup=back_button(),
+            )
+
+            return
+
+        await query.message.edit_text(
+            f"🎉 **ممنون از حمایت شما!**\n\n"
+            f"🎵 {title}\n\n"
+            "📥 در حال ارسال فایل...",
+            parse_mode="Markdown",
+        )
+
+        chat_id = query.message.chat_id
+
+        caption = (
+            f"🎵 {title}\n\n"
+            "🔗 کانال رسمی: @DeepHouse_Farsi"
+        )
+
+        sent = False
+
+        # Try audio
+        try:
+
+            await context.bot.send_audio(
+                chat_id=chat_id,
+                audio=file_id,
+                caption=caption,
+            )
+
+            sent = True
+
+        except Exception:
+            logger.exception("ارسال به صورت audio شکست خورد.")
+
+        # Try document
+        if not sent:
+
+            try:
+
+                await context.bot.send_document(
+                    chat_id=chat_id,
+                    document=file_id,
+                    caption=caption,
+                )
+
+                sent = True
+
+            except Exception:
+                logger.exception("ارسال به صورت document شکست خورد.")
+
+        if sent:
+
+            try:
+                SONGS[song_id]["downloads"] = (
+                    int(SONGS[song_id].get("downloads", 0)) + 1
+                )
+
+                save_songs(SONGS)
+
+            except Exception:
+                logger.exception("خطا در ثبت دانلود.")
+
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="👇 برای دریافت آهنگ‌های دیگر:",
+                reply_markup=back_button(),
+            )
+
+        else:
+
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="❌ ارسال فایل ناموفق بود. لطفاً به ادمین اطلاع دهید.",
+            )
+
+        return
+
+
+# =========================
+# Statistics
+# =========================
+
+async def stats(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+
+    if update.effective_user.id != ADMIN_ID:
+
+        await update.message.reply_text(
+            "⛔ شما دسترسی مدیریتی ندارید."
+        )
+
+        return
+
+    songs = load_songs()
+
+    total_songs = len(songs)
+
+    total_downloads = 0
+
+    for song in songs.values():
+
+        try:
+            total_downloads += int(
+                song.get("downloads", 0)
+            )
+        except Exception:
+            pass
+
+    text = (
+        "📊 **آمار ربات**\n\n"
+        f"🎵 تعداد آهنگ‌ها: {total_songs}\n"
+        f"📥 مجموع دانلودها: {total_downloads}\n\n"
+    )
+
+    if songs:
+
+        text += "📋 آمار آهنگ‌ها:\n\n"
+
+        for song in songs.values():
+
+            text += (
+                f"• {song.get('title', 'بدون عنوان')}\n"
+                f"  📥 {song.get('downloads', 0)} دانلود\n\n"
+            )
+
+    await update.message.reply_text(
+        text,
+        parse_mode="Markdown",
+    )
+
+
+# =========================
+# Telegram Application
+# =========================
+
+telegram_app = (
+    Application.builder()
+    .token(TOKEN)
+    .build()
+)
+
+telegram_app.add_handler(
+    CommandHandler("start", start)
+)
+
+telegram_app.add_handler(
+    CommandHandler("add", add_song)
+)
+
+telegram_app.add_handler(
+    CommandHandler("stats", stats)
+)
+
+telegram_app.add_handler(
+    CallbackQueryHandler(button)
+)
+
+telegram_app.add_handler(
+    MessageHandler(
+        filters.AUDIO
+        | filters.VOICE
+        | filters.Document.ALL
+        | (filters.TEXT & ~filters.COMMAND),
+        handle_message,
+    )
+)
+
+
+# =========================
+# Dedicated Telegram Loop
+# =========================
+
 bot_loop = asyncio.new_event_loop()
 
-def run_bot_loop():
-    asyncio.set_event_loop(bot_loop)
-    
-    async def setup_and_run():
-        await application.initialize()
-        await application.start()
-        
-        # برای اینکه Application در وضعیت running = True قرار گیرد و updater داخلی (در صورت نیاز به پردازش صف) استارت بخورد:
-        if application.updater:
-            await application.updater.start_webhook(listen="localhost", port=0, webhook_url="") # جلوگیری از تداخل پورت ولی فعال‌سازی لوپ داخلی آپدیت‌ها
-        
-        if RENDER_EXTERNAL_URL:
-            webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/webhook"
-            await application.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
-            logging.info(f"Webhook explicitly set to: {webhook_url}")
 
-    bot_loop.run_until_complete(setup_and_run())
+def run_bot():
+
+    asyncio.set_event_loop(bot_loop)
+
+    async def setup():
+
+        logger.info("Initializing Telegram application...")
+
+        await telegram_app.initialize()
+
+        logger.info("Starting Telegram application...")
+
+        await telegram_app.start()
+
+        logger.info(
+            f"Telegram application running: {telegram_app.running}"
+        )
+
+        if not RENDER_EXTERNAL_URL:
+
+            raise RuntimeError(
+                "RENDER_EXTERNAL_URL در Render تنظیم نشده است."
+            )
+
+        webhook_url = (
+            RENDER_EXTERNAL_URL.rstrip("/")
+            + "/webhook"
+        )
+
+        await telegram_app.bot.set_webhook(
+            url=webhook_url,
+            drop_pending_updates=True,
+        )
+
+        logger.info(
+            f"Webhook set successfully: {webhook_url}"
+        )
+
+    bot_loop.run_until_complete(setup())
+
+    logger.info("Telegram event loop is running.")
+
     bot_loop.run_forever()
 
-bot_thread = threading.Thread(target=run_bot_loop, daemon=True)
+
+bot_thread = threading.Thread(
+    target=run_bot,
+    daemon=True,
+    name="telegram-bot-loop",
+)
+
 bot_thread.start()
+
+
+# =========================
+# Flask Routes
+# =========================
 
 @app.route("/", methods=["GET"])
 def index():
-    return "Bot is running!", 200
+
+    return "Deep House Farsi Bot is running!", 200
+
 
 @app.route("/health", methods=["GET"])
 def health():
+
     return {
         "status": "healthy",
-        "application_running": application.running,
-        "bot_loop_running": bot_loop.is_running()
+        "telegram_running": telegram_app.running,
+        "bot_loop_running": bot_loop.is_running(),
     }, 200
+
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    if request.headers.get("content-type") == "application/json":
-        json_data = request.get_json(silent=True)
-        
-        if not isinstance(json_data, dict):
-            return "Invalid JSON", 400
 
-        try:
-            update = Update.de_json(json_data, application.bot)
-            if update:
-                bot_loop.call_soon_threadsafe(
-                    application.update_queue.put_nowait,
-                    update
-                )
-        except Exception as e:
-            logging.error(f"Error processing update: {e}")
-            return "Error", 500
-            
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+
+        return "Invalid JSON", 400
+
+    try:
+
+        update = Update.de_json(
+            data,
+            telegram_app.bot,
+        )
+
+        if update:
+
+            bot_loop.call_soon_threadsafe(
+                telegram_app.update_queue.put_nowait,
+                update,
+            )
+
         return "OK", 200
-    return "Invalid request", 403
+
+    except Exception:
+
+        logger.exception(
+            "Error while processing webhook"
+        )
+
+        return "Internal Server Error", 500
+
+
+# =========================
+# Local Development
+# =========================
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
+    port = int(
+        os.environ.get("PORT", 10000)
+    )
+
+    app.run(
+        host="0.0.0.0",
+        port=port,
+    )
