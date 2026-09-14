@@ -9,7 +9,7 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = "8836665873:AAE7yM9_qhV6xgAv5VfnU3LDm-twXP910Ak"
 YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
 
-# دیکشنری آهنگ‌ها و آمار دانلود
+# لیست آهنگ‌ها و فایل‌آیدی معتبر
 SONGS = {
     "song_1": {
         "title": "🎵 بزن به سیم آخر",
@@ -23,18 +23,16 @@ application = Application.builder().token(TOKEN).build()
 
 async def start(update: Update, context):
     keyboard = [
-        [InlineKeyboardButton("❤️ سابسکرایب در یوتیوب", url=YOUTUBE_URL)]
+        [InlineKeyboardButton("❤️ ۱. سابسکرایب در یوتیوب", url=YOUTUBE_URL)],
+        [InlineKeyboardButton("✅ ۲. سابسکرایب کردم، دریافت آهنگ", callback_data="check_sub_song_1")]
     ]
     
-    for song_id, song_info in SONGS.items():
-        keyboard.append([InlineKeyboardButton(f"✅ دریافت آهنگ: {song_info['title']}", callback_data=song_id)])
-
     reply_markup = InlineKeyboardMarkup(keyboard)
     welcome_text = (
         "✨ **به ربات اختصاصی کانال Deep House Farsi خوش آمدید!**\n\n"
         "🎧 برای دریافت فایل صوتی آهنگ‌ها:\n"
-        "۱. ابتدا روی دکمه‌ی بالا بزنید و کانال یوتیوب ما را سابسکرایب کنید.\n"
-        "۲. سپس روی دکمه‌ی دریافت آهنگ بزنید تا فایل صوتی مستقیماً برای شما ارسال شود.\n\n"
+        "۱. ابتدا روی دکمه‌ی اول بزنید و کانال یوتیوب ما را سابسکرایب کنید.\n"
+        "۲. سپس روی دکمه‌ی دوم بزنید تا فایل صوتی مستقیماً برای شما ارسال شود.\n\n"
         "🔥 از حمایت شما سپاسگزاریم!"
     )
     await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
@@ -57,7 +55,7 @@ async def get_file_id(update: Update, context):
     if file_id:
         await update.message.reply_text(
             f"📁 **فایل‌آیدی این {file_type}:**\n`{file_id}`\n\n"
-            f"برای اضافه کردن آهنگ جدید، می‌توانید از این فایل‌آیدی استفاده کنید.",
+            f"می‌توانید از این کد در لیست آهنگ‌ها استفاده کنید.",
             parse_mode="Markdown"
         )
     else:
@@ -67,22 +65,36 @@ async def button(update: Update, context):
     query = update.callback_query
     await query.answer()
     
-    song_id = query.data
+    data = query.data
     
-    if song_id in SONGS:
-        song_info = SONGS[song_id]
-        SONGS[song_id]["downloads"] += 1
-        
-        await query.message.reply_text(f"🎉 در حال ارسال {song_info['title']}...")
-        try:
-            await context.bot.send_audio(
-                chat_id=query.message.chat_id,
-                audio=song_info["file_id"],
-                caption=f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
-            )
-        except Exception as e:
-            logging.error(f"Error sending audio: {e}")
-            await query.message.reply_text("خطا در ارسال فایل. لطفاً به ادمین اطلاع دهید.")
+    if data.startswith("check_sub_"):
+        song_id = data.replace("check_sub_", "")
+        if song_id in SONGS:
+            song_info = SONGS[song_id]
+            SONGS[song_id]["downloads"] += 1
+            
+            await query.message.reply_text(f"🎉 از سابسکرایب شما ممنونیم! در حال ارسال {song_info['title']}...")
+            
+            # سیستم هوشمند ارسال فایل (تست انواع روش‌ها تا فایل حتماً ارسال شود)
+            sent = False
+            chat_id = query.message.chat_id
+            file_id = song_info["file_id"]
+            caption = f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
+            
+            for send_func in [
+                lambda: context.bot.send_audio(chat_id=chat_id, audio=file_id, caption=caption),
+                lambda: context.bot.send_document(chat_id=chat_id, document=file_id, caption=caption),
+                lambda: context.bot.send_voice(chat_id=chat_id, voice=file_id, caption=caption)
+            ]:
+                try:
+                    await send_func()
+                    sent = True
+                    break
+                except Exception:
+                    continue
+                    
+            if not sent:
+                await query.message.reply_text("خطا در ارسال فایل. لطفاً به ادمین اطلاع دهید.")
 
 async def stats(update: Update, context):
     total_songs = len(SONGS)
