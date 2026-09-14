@@ -9,7 +9,7 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = "8836665873:AAE7yM9_qhV6xgAv5VfnU3LDm-twXP910Ak"
 YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
 
-# لیست آهنگ‌ها (برای اضافه کردن آهنگ جدید، کافی است مثل زیر اضافه کنید)
+# لیست آهنگ‌ها
 SONGS = {
     "song_1": {
         "title": "🎵 بزن به سیم آخر",
@@ -26,7 +26,6 @@ async def start(update: Update, context):
     ]
     
     for song_id, song_info in SONGS.items():
-        # دکمه با callback_data استاندارد
         keyboard.append([InlineKeyboardButton(f"✅ دریافت آهنگ: {song_info['title']}", callback_data=song_id)])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -36,31 +35,60 @@ async def start(update: Update, context):
     )
 
 async def get_file_id(update: Update, context):
-    if update.message.audio:
-        file_id = update.message.audio.file_id
-        await update.message.reply_text(f"📁 فایل‌آیدی این آهنگ برای قرار دادن در کد:\n`{file_id}`", parse_mode="Markdown")
+    # گرفتن فایل‌آیدی از هر نوع فایلی (صوتی، ویدیو، سند و...)
+    msg = update.message
+    file_id = None
+    file_type = "نامشخص"
+    
+    if msg.audio:
+        file_id = msg.audio.file_id
+        file_type = "Audio"
+    elif msg.voice:
+        file_id = msg.voice.file_id
+        file_type = "Voice"
+    elif msg.video:
+        file_id = msg.video.file_id
+        file_type = "Video"
+    elif msg.document:
+        file_id = msg.document.file_id
+        file_type = "Document"
+        
+    if file_id:
+        await update.message.reply_text(f"📁 فایل‌آیدی این {file_type}:\n`{file_id}`", parse_mode="Markdown")
+    else:
+        await update.message.reply_text("لطفاً یک فایل صوتی یا ویدیو بفرستید.")
 
 async def button(update: Update, context):
     query = update.callback_query
     await query.answer()
     
-    song_id = query.data # مستقیماً کلید مثل song_1 را می‌گیرد
+    song_id = query.data
     
     if song_id in SONGS:
         song_info = SONGS[song_id]
         await query.message.reply_text(f"از حمایت شما سپاسگزاریم! 🎉 در حال ارسال {song_info['title']}...")
         try:
-            await context.bot.send_audio(
+            # ارسال امن فایل بدون توجه به نوع فرمت (صوتی یا ویدیو)
+            await context.bot.send_document(
                 chat_id=query.message.chat_id,
-                audio=song_info["file_id"],
+                document=song_info["file_id"],
                 caption=f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
             )
         except Exception as e:
-            logging.error(f"Error sending audio: {e}")
-            await query.message.reply_text("خطا در ارسال فایل. لطفاً فایل‌آیدی را بررسی کنید.")
+            logging.error(f"Error sending file: {e}")
+            # اگر سند نشد، به عنوان ویدیو تست کند
+            try:
+                await context.bot.send_video(
+                    chat_id=query.message.chat_id,
+                    video=song_info["file_id"],
+                    caption=f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
+                )
+            except Exception as e2:
+                logging.error(f"Error sending video: {e2}")
+                await query.message.reply_text("خطا در ارسال فایل. لطفاً فایل را به صورت صوتی استاندارد (MP3) دوباره به ربات بفرستید تا فایل‌آیدی جدید بگیرید.")
 
 application.add_handler(CommandHandler("start", start))
-application.add_handler(MessageHandler(filters.AUDIO, get_file_id))
+application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, get_file_id))
 application.add_handler(CallbackQueryHandler(button))
 
 @app.route("/")
