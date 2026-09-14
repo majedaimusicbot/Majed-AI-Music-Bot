@@ -9,7 +9,7 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = "8836665873:AAE7yM9_qhV6xgAv5VfnU3LDm-twXP910Ak"
 YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
 
-# در اینجا آهنگ‌ها را با نوع فایل ذخیره می‌کنیم
+# لیست آهنگ‌ها (برای اضافه کردن آهنگ‌های بعدی، کافی است به همین فرمت ادامه دهید)
 SONGS = {
     "song_1": {
         "title": "🎵 بزن به سیم آخر",
@@ -74,7 +74,7 @@ async def button(update: Update, context):
         chat_id = query.message.chat_id
         caption = f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
         
-        # تلاش هوشمند برای ارسال با توجه به انواع مختلف متدهای تلگرام
+        # سیستم هوشمند ارسال فایل با تست کردن روش‌های مختلف تلگرام
         sent = False
         for send_func in [
             lambda: context.bot.send_audio(chat_id=chat_id, audio=file_id, caption=caption),
