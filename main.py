@@ -32,14 +32,8 @@ def load_songs():
                     return {}
                 return json.loads(content)
         except Exception as e:
-            logging.error(f"Error reading {DB_FILE}: {e}. Returning default database.")
-    return {
-        "s_default": {
-            "title": "🎵 بزن به سیم آخر",
-            "file_id": "",
-            "downloads": 0
-        }
-    }
+            logging.error(f"Error reading {DB_FILE}: {e}. Returning empty database.")
+    return {}
 
 def save_songs(songs):
     try:
@@ -52,50 +46,10 @@ SONGS = load_songs()
 
 app = Flask(__name__)
 
+# 1. ساخت Application اول از همه
 application = Application.builder().token(TOKEN).build()
 
-bot_loop = None
-bot_thread = None
-is_initialized = False
-
-def run_async_loop(loop):
-    asyncio.set_event_loop(loop)
-    loop.run_forever()
-
-def init_bot_background():
-    global bot_loop, bot_thread, is_initialized
-    if is_initialized:
-        return
-    
-    bot_loop = asyncio.new_event_loop()
-    bot_thread = threading.Thread(target=run_async_loop, args=(bot_loop,), daemon=True)
-    bot_thread.start()
-    
-    async def _setup():
-        await application.initialize()
-        await application.start()
-        asyncio.create_task(application.updater.start_polling()) if hasattr(application, 'updater') and application.updater else None
-        
-        render_external_url = os.environ.get("RENDER_EXTERNAL_URL")
-        if render_external_url:
-            webhook_url = f"{render_external_url}/{TOKEN}"
-            await application.bot.set_webhook(webhook_url)
-            logging.info(f"Webhook set to: {webhook_url}")
-
-    future = asyncio.run_coroutine_threadsafe(_setup(), bot_loop)
-    future.result()
-    is_initialized = True
-
-init_bot_background()
-
-def get_main_menu_markup():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("❤️ عضویت در یوتیوب", url=YOUTUBE_URL)],
-        [InlineKeyboardButton("🎵 آرشیو آهنگ‌ها", callback_data="archive_0")],
-        [InlineKeyboardButton("🔎 جستجوی آهنگ", callback_data="search_start"),
-         InlineKeyboardButton("🔥 جدیدترین آهنگ‌ها", callback_data="latest_songs")]
-    ])
-
+# 2. اضافه کردن تمام Handlerها
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         "✨ **به Deep House Farsi خوش آمدید**\n\n"
@@ -126,7 +80,6 @@ async def add_song_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
-        # بررسی اینکه آیا کاربر منتظر ورودی جستجو است
         if context.user_data.get('waiting_for_search'):
             context.user_data['waiting_for_search'] = False
             query_text = update.message.text.strip()
@@ -236,11 +189,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         keyboard.append([InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")])
         
-        await query.message.edit_text(
-            f"📂 **آرشیوی از بهترین‌های Deep House**\nصفحه {page + 1} از {max_page + 1}:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
+        if total_songs == 0:
+            text = "📂 آرشیو آهنگ‌ها در حال حاضر خالی است."
+        else:
+            text = f"📂 **آرشیوی از بهترین‌های Deep House**\nصفحه {page + 1} از {max_page + 1}:"
+
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
     elif data == "search_start":
         context.user_data['waiting_for_search'] = True
@@ -253,18 +207,19 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "latest_songs":
         song_items = list(SONGS.items())
-        latest = song_items[-10:][::-1] # 10 آهنگ آخر معکوس
+        latest = song_items[-10:][::-1]
         
         keyboard = []
         for s_id, info in latest:
             keyboard.append([InlineKeyboardButton(f"🔥 {info['title']}", callback_data=f"sel_{s_id}")])
         keyboard.append([InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")])
         
-        await query.message.edit_text(
-            "🔥 **جدیدترین آهنگ‌های اضافه شده:**",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
+        if not latest:
+            text = "🔥 هیچ آهنگ جدیدی یافت نشد."
+        else:
+            text = "🔥 **جدیدترین آهنگ‌های اضافه شده:**"
+
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
     elif data == "noop":
         pass
@@ -334,11 +289,55 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(stats_text, parse_mode="Markdown")
 
+def get_main_menu_markup():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❤️ عضویت در یوتیوب", url=YOUTUBE_URL)],
+        [InlineKeyboardButton("🎵 آرشیو آهنگ‌ها", callback_data="archive_0")],
+        [InlineKeyboardButton("🔎 جستجوی آهنگ", callback_data="search_start"),
+         InlineKeyboardButton("🔥 جدیدترین آهنگ‌ها", callback_data="latest_songs")]
+    ])
+
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("add", add_song_command))
 application.add_handler(CommandHandler("stats", stats))
 application.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL | filters.TEXT & ~filters.COMMAND, handle_media))
 application.add_handler(CallbackQueryHandler(button))
+
+# 3. ایجاد Background Asyncio Loop و راه‌اندازی بدون Polling
+bot_loop = None
+bot_thread = None
+is_initialized = False
+
+def run_async_loop(loop):
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
+
+def init_bot_background():
+    global bot_loop, bot_thread, is_initialized
+    if is_initialized:
+        return
+    
+    bot_loop = asyncio.new_event_loop()
+    bot_thread = threading.Thread(target=run_async_loop, args=(bot_loop,), daemon=True)
+    bot_thread.start()
+    
+    async def _setup():
+        # 4. اجرای initialize و start بدون Polling
+        await application.initialize()
+        await application.start()
+        
+        # 5. تنظیم Webhook
+        render_external_url = os.environ.get("RENDER_EXTERNAL_URL")
+        if render_external_url:
+            webhook_url = f"{render_external_url}/{TOKEN}"
+            await application.bot.set_webhook(webhook_url)
+            logging.info(f"Webhook set to: {webhook_url}")
+
+    future = asyncio.run_coroutine_threadsafe(_setup(), bot_loop)
+    future.result()
+    is_initialized = True
+
+init_bot_background()
 
 @app.route("/")
 def index():
