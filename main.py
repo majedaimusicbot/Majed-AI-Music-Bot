@@ -46,10 +46,9 @@ SONGS = load_songs()
 
 app = Flask(__name__)
 
-# 1. ساخت Application اول از همه
+# ساخت Application اول از همه
 application = Application.builder().token(TOKEN).build()
 
-# 2. اضافه کردن تمام Handlerها
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         "✨ **به Deep House Farsi خوش آمدید**\n\n"
@@ -297,13 +296,14 @@ def get_main_menu_markup():
          InlineKeyboardButton("🔥 جدیدترین آهنگ‌ها", callback_data="latest_songs")]
     ])
 
+# ثبت Handlerها
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("add", add_song_command))
 application.add_handler(CommandHandler("stats", stats))
 application.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL | filters.TEXT & ~filters.COMMAND, handle_media))
 application.add_handler(CallbackQueryHandler(button))
 
-# 3. ایجاد Background Asyncio Loop و راه‌اندازی بدون Polling
+# راه‌اندازی Thread و Event Loop جداگانه بدون Polling
 bot_loop = None
 bot_thread = None
 is_initialized = False
@@ -322,11 +322,9 @@ def init_bot_background():
     bot_thread.start()
     
     async def _setup():
-        # 4. اجرای initialize و start بدون Polling
         await application.initialize()
         await application.start()
         
-        # 5. تنظیم Webhook
         render_external_url = os.environ.get("RENDER_EXTERNAL_URL")
         if render_external_url:
             webhook_url = f"{render_external_url}/{TOKEN}"
