@@ -72,6 +72,12 @@ def init_bot_background():
     async def _setup():
         await application.initialize()
         await application.start()
+        # تنظیم خودکار وب‌هوک بر اساس دامنه رندر
+        render_external_url = os.environ.get("RENDER_EXTERNAL_URL")
+        if render_external_url:
+            webhook_url = f"{render_external_url}/{TOKEN}"
+            await application.bot.set_webhook(webhook_url)
+            logging.info(f"Webhook set to: {webhook_url}")
 
     future = asyncio.run_coroutine_threadsafe(_setup(), bot_loop)
     future.result()
@@ -148,7 +154,7 @@ async def handle_media(update: Update, context):
             
             await update.message.reply_text(
                 f"🎉 آهنگ جدید با موفقیت اضافه شد!\n\nعنوان: {title}\nکد: `{song_id}`",
-                parse_mode="Markdown"
+                parse_Mode="Markdown"
             )
         else:
             await update.message.reply_text(
