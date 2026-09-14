@@ -46,7 +46,6 @@ SONGS = load_songs()
 
 app = Flask(__name__)
 
-# ساخت Application اول از همه
 application = Application.builder().token(TOKEN).build()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -77,12 +76,12 @@ async def add_song_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ عنوان «{song_title}» ثبت شد.\nاکنون فایل صوتی یا موزیک‌ویدیو را بفرستید.")
 
 async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global SONGS
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         if context.user_data.get('waiting_for_search'):
             context.user_data['waiting_for_search'] = False
             query_text = update.message.text.strip()
-            global SONGS
             SONGS = load_songs()
             
             matched = []
@@ -109,7 +108,6 @@ async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
         return
 
-    global SONGS
     msg = update.message
     file_id = None
     
@@ -273,12 +271,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id=chat_id, text="❌ خطا در ارسال فایل. لطفاً به ادمین اطلاع دهید.")
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global SONGS
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         await update.message.reply_text("شما دسترسی مدیریتی ندارید.")
         return
 
-    global SONGS
     SONGS = load_songs()
     
     total_songs = len(SONGS)
@@ -296,14 +294,12 @@ def get_main_menu_markup():
          InlineKeyboardButton("🔥 جدیدترین آهنگ‌ها", callback_data="latest_songs")]
     ])
 
-# ثبت Handlerها
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("add", add_song_command))
 application.add_handler(CommandHandler("stats", stats))
 application.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL | filters.TEXT & ~filters.COMMAND, handle_media))
 application.add_handler(CallbackQueryHandler(button))
 
-# راه‌اندازی Thread و Event Loop جداگانه بدون Polling
 bot_loop = None
 bot_thread = None
 is_initialized = False
