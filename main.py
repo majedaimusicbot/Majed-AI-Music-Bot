@@ -9,6 +9,7 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = "8836665873:AAE7yM9_qhV6xgAv5VfnU3LDm-twXP910Ak"
 YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
 
+# لیست آهنگ‌های شما (برای اضافه کردن آهنگ‌های بعدی، کافی است song_2، song_3 و... را اینجا اضافه کنید)
 SONGS = {
     "song_1": {
         "title": "🎵 بزن به سیم آخر",
@@ -89,15 +90,26 @@ async def button(update: Update, context):
             SONGS[song_id]["downloads"] += 1
             
             await query.message.reply_text(f"🎉 ممنون از حمایت شما! در حال ارسال {song_info['title']}...")
-            try:
-                await context.bot.send_audio(
-                    chat_id=query.message.chat_id,
-                    audio=song_info["file_id"],
-                    caption=f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
-                )
-            except Exception as e:
-                logging.error(f"Error sending audio: {e}")
-                await query.message.reply_text("خطا در ارسال فایل. لطفاً دوباره تلاش کنید.")
+            
+            chat_id = query.message.chat_id
+            file_id = song_info["file_id"]
+            caption = f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
+            
+            # ارسال با حالت مطمئن (ابتدا صوت، اگر نشد به عنوان فایل سند/document می‌فرستد تا خطا ندهد)
+            sent = False
+            for send_method in [
+                lambda: context.bot.send_audio(chat_id=chat_id, audio=file_id, caption=caption),
+                lambda: context.bot.send_document(chat_id=chat_id, document=file_id, caption=caption)
+            ]:
+                try:
+                    await send_method()
+                    sent = True
+                    break
+                except Exception:
+                    continue
+            
+            if not sent:
+                await query.message.reply_text("خطا در ارسال فایل. لطفاً فایل‌آیدی جدیدی از طریق ربات ثبت کنید.")
 
 async def stats(update: Update, context):
     total_songs = len(SONGS)
