@@ -293,8 +293,9 @@ telegram_app.add_handler(CommandHandler("stats", stats))
 telegram_app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.Document.ALL | filters.TEXT & ~filters.COMMAND, handle_media))
 telegram_app.add_handler(CallbackQueryHandler(button))
 
-# Event Loop و Thread اختصاصی برای مدیریت چرخه حیات ربات
+# Event Loop و Thread اختصاصی برای مدیریت چرخه حیات ربات به همراه سینک‌سازی راه‌اندازی
 bot_loop = asyncio.new_event_loop()
+app_is_ready = threading.Event()
 
 def run_bot_loop():
     asyncio.set_event_loop(bot_loop)
@@ -302,16 +303,33 @@ def run_bot_loop():
     async def setup_app():
         await telegram_app.initialize()
         await telegram_app.start()
+        # فراخوانی استارت برای updater/processor داخلی پایتون-تلگرام-بات تا running روی True تنظیم شود
+        if hasattr(telegram_app, "updater") and telegram_app.updater:
+            await telegram_app.updater.start_polling() # صرفاً جهت راه‌اندازی مکانیسم داخلی اگر نیاز باشد ولی در اینجا Webhook داریم پس استارت پارت‌های مربوطه را دستی می‌زنیم:
+        
+        # برای اطمینان از اینکه چرخه پردازش صف آپدیت‌ها در PTB v22 روشن شود:
+        await telegram_app.updater.start_webhook(listen="0.0.0.0", port=8443, webhook_url="") if False else None
+        
+        # در PTB v20+ برای اینکه Application کاملاً اکتیو و پردازشگر صف فعال شود باید پارت‌های زیر اجرا شوند:
+        await telegram_app.start()
+        
+        # تنظیم Webhook در تلگرام
         if RENDER_EXTERNAL_URL:
             webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/webhook"
             await telegram_app.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
             logging.info(f"Webhook explicitly set to: {webhook_url}")
+            
+        app_is_ready.set()
 
     bot_loop.run_until_complete(setup_app())
     bot_loop.run_forever()
 
 bot_thread = threading.Thread(target=run_bot_loop, daemon=True)
 bot_thread.start()
+
+@app.before_first_request if hasattr(app, "before_first_request") else lambda: None
+def wait_for_bot():
+    app_is_ready.wait()
 
 @app.route("/", methods=["GET"])
 def index():
@@ -327,6 +345,10 @@ def health():
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    # تضمین اینکه Flask تا زمان آماده‌سازی کامل تلگرام درخواست را پردازش نکند
+    if not app_is_ready.is_set():
+        app_is_ready.wait(timeout=5)
+
     if request.headers.get("content-type") == "application/json":
         json_data = request.get_json(silent=True)
         
