@@ -34,7 +34,7 @@ def load_songs():
     return {
         "song_1": {
             "title": "🎵 بزن به سیم آخر",
-            "file_id": "CQACAgQAAxkBAAMTaqfErP0p4AKJQHX5yGTqz06TmiIAAg8iAAIRZEBR7jMYGeE6jE9BA",
+            "file_id": "",
             "downloads": 0
         }
     }
@@ -72,7 +72,6 @@ def init_bot_background():
     async def _setup():
         await application.initialize()
         await application.start()
-        # پردازش صف آپدیت‌ها برای دریافت پیام‌ها
         asyncio.create_task(application.updater.start_polling()) if hasattr(application, 'updater') and application.updater else None
         
         render_external_url = os.environ.get("RENDER_EXTERNAL_URL")
@@ -92,20 +91,21 @@ async def start(update: Update, context):
     SONGS = load_songs()
     
     keyboard = [
-        [InlineKeyboardButton("❤️ سابسکرایب در یوتیوب", url=YOUTUBE_URL)]
+        [InlineKeyboardButton("❤️ سابسکرایب در کانال یوتیوب", url=YOUTUBE_URL)]
     ]
     for song_id, song_info in SONGS.items():
-        keyboard.append([InlineKeyboardButton(f"✅ دریافت آهنگ: {song_info['title']}", callback_data=f"select_{song_id}")])
+        keyboard.append([InlineKeyboardButton(f"🎧 دریافت آهنگ: {song_info['title']}", callback_data=f"select_{song_id}")])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     welcome_text = (
-        "✨ **به ربات اختصاصی کانال Deep House Farsi خوش آمدید!**\n\n"
-        "🎧 برای دریافت فایل صوتی آهنگ‌ها:\n"
-        "۱. ابتدا روی دکمه‌ی بالا بزنید و کانال یوتیوب ما را سابسکرایب کنید.\n"
-        "۲. سپس روی دکمه‌ی دریافت آهنگ دلخواه بزنید.\n\n"
-        "🔥 از حمایت شما سپاسگزاریم!"
+        "✨ **به ربات رسمی کانال Deep House Farsi خوش آمدید!**\n\n"
+        "🎧 جهت دریافت فایل‌های صوتی:\n"
+        "1️⃣ ابتدا روی دکمه‌ی بالا کلیک کرده و کانال یوتیوب ما را سابسکرایب کنید.\n"
+        "2️⃣ سپس آهنگ مورد نظر خود را از لیست زیر انتخاب کنید.\n\n"
+        "🔥 از حمایت و همراهی شما سپاسگزاریم!"
     )
-    await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
+    if update.message:
+        await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
 
 async def add_song_command(update: Update, context):
     user_id = update.effective_user.id
@@ -115,15 +115,15 @@ async def add_song_command(update: Update, context):
 
     if not context.args:
         await update.message.reply_text(
-            "⚠️ روش استفاده:\n"
-            "`/add نام آهنگ`\n(و فایل صوتی را بفرستید)",
+            "⚠️ **راهنمای افزودن آهنگ:**\n"
+            "`/add نام آهنگ`\n(سپس فایل صوتی را ارسال کنید)",
             parse_mode="Markdown"
         )
         return
     
     song_title = "🎵 " + " ".join(context.args)
     context.user_data['pending_title'] = song_title
-    await update.message.reply_text(f"✅ عنوان «{song_title}» ثبت شد.\nحالا فایل صوتی مربوطه را بفرستید.")
+    await update.message.reply_text(f"✅ عنوان «{song_title}» ثبت شد.\nاکنون فایل صوتی یا موزیک‌ویدیو را بفرستید.")
 
 async def handle_media(update: Update, context):
     user_id = update.effective_user.id
@@ -155,12 +155,12 @@ async def handle_media(update: Update, context):
             save_songs(SONGS)
             
             await update.message.reply_text(
-                f"🎉 آهنگ جدید با موفقیت اضافه شد!\n\nعنوان: {title}\nکد: `{song_id}`",
+                f"🎉 **آهنگ جدید با موفقیت ذخیره شد!**\n\n🔹 عنوان: {title}\n🔹 شناسه: `{song_id}`",
                 parse_mode="Markdown"
             )
         else:
             await update.message.reply_text(
-                f"📁 فایل‌آیدی:\n`{file_id}`\n\nبرای افزودن به لیست بنویسید:\n`/add نام آهنگ`",
+                f"📁 **فایل‌آیدی دریافت شد:**\n`{file_id}`\n\nبرای ثبت نهایی بنویسید:\n`/add نام آهنگ`",
                 parse_mode="Markdown"
             )
 
@@ -173,19 +173,34 @@ async def button(update: Update, context):
     
     data = query.data
     
-    if data.startswith("select_"):
+    if data == "main_menu":
+        keyboard = [
+            [InlineKeyboardButton("❤️ سابسکرایب در کانال یوتیوب", url=YOUTUBE_URL)]
+        ]
+        for song_id, song_info in SONGS.items():
+            keyboard.append([InlineKeyboardButton(f"🎧 دریافت آهنگ: {song_info['title']}", callback_data=f"select_{song_id}")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.message.edit_text(
+            "✨ **منوی اصلی ربات Deep House Farsi**\n\nآهنگ مورد نظر خود را از لیست زیر انتخاب کنید:",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+
+    elif data.startswith("select_"):
         song_id = data.replace("select_", "")
         if song_id in SONGS:
             song_info = SONGS[song_id]
             keyboard = [
-                [InlineKeyboardButton("❤️ برو به کانال و سابسکرایب کن", url=YOUTUBE_URL)],
-                [InlineKeyboardButton("✅ سابسکرایب کردم، دریافت آهنگ", callback_data=f"verify_{song_id}")]
+                [InlineKeyboardButton("❤️ سابسکرایب در یوتیوب", url=YOUTUBE_URL)],
+                [InlineKeyboardButton("✅ سابسکرایب کردم، دریافت فایل", callback_data=f"verify_{song_id}")],
+                [InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            await query.message.reply_text(
-                f"⚠️ **توجه:** شما هنوز مرحله سابسکرایب را تأیید نکرده‌اید!\n\n"
-                f"برای دریافت آهنگ **{song_info['title']}**، ابتدا کانال را سابسکرایب کنید و سپس روی دکمه‌ی تأیید زیر بزنید.",
+            await query.message.edit_text(
+                f"⚠️ **مرحله تایید سابسکرایب**\n\n"
+                f"برای دریافت موزیک **{song_info['title']}**، لطفاً مطمئن شوید که کانال یوتیوب ما را سابسکرایب کرده‌اید و سپس روی دکمه تایید بزنید.",
                 reply_markup=reply_markup,
                 parse_mode="Markdown"
             )
@@ -194,31 +209,33 @@ async def button(update: Update, context):
         song_id = data.replace("verify_", "")
         if song_id in SONGS:
             song_info = SONGS[song_id]
-            await query.message.reply_text(f"🎉 ممنون از حمایت شما! در حال ارسال {song_info['title']}...")
+            await query.message.edit_text(f"🎉 سپاس از حمایت شما!\nدر حال ارسال فایل **{song_info['title']}**...")
             
             chat_id = query.message.chat_id
             file_id = song_info["file_id"]
-            caption = f"{song_info['title']}\n\n🔗 کانال ما: @DeepHouse_Farsi"
+            caption = f"🎵 {song_info['title']}\n\n🔗 کانال رسمی ما: @DeepHouse_Farsi"
             
-            send_tasks = [
-                ("send_audio", lambda: context.bot.send_audio(chat_id=chat_id, audio=file_id, caption=caption)),
-                ("send_document", lambda: context.bot.send_document(chat_id=chat_id, document=file_id, caption=caption))
-            ]
-            
-            sent = false = False
-            for method_name, send_func in send_tasks:
+            sent = False
+            try:
+                await context.bot.send_audio(chat_id=chat_id, audio=file_id, caption=caption, parse_mode="Markdown")
+                sent = True
+            except Exception as e:
+                logging.error(f"Failed to send audio: {e}")
                 try:
-                    await send_func()
+                    await context.bot.send_document(chat_id=chat_id, document=file_id, caption=caption, parse_mode="Markdown")
                     sent = True
-                    break
-                except Exception as e:
-                    logging.error(f"Failed to send file using {method_name}: {e}")
+                except Exception as e2:
+                    logging.error(f"Failed to send document: {e2}")
             
             if sent:
                 SONGS[song_id]["downloads"] += 1
                 save_songs(SONGS)
+                
+                # ارسال دکمه بازگشت به منو
+                back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")]])
+                await context.bot.send_message(chat_id=chat_id, text="👇 برای دریافت سایر آهنگ‌ها از منو استفاده کنید:", reply_markup=back_keyboard)
             else:
-                await query.message.reply_text("خطا در ارسال فایل. لطفاً به ادمین اطلاع دهید.")
+                await context.bot.send_message(chat_id=chat_id, text="❌ خطا در ارسال فایل. لطفاً به ادمین اطلاع دهید.")
 
 async def stats(update: Update, context):
     user_id = update.effective_user.id
@@ -230,9 +247,9 @@ async def stats(update: Update, context):
     SONGS = load_songs()
     
     total_songs = len(SONGS)
-    stats_text = f"📊 **آمار ربات Deep House Farsi**\n\n🎵 کل آهنگ‌ها: {total_songs}\n\n"
+    stats_text = f"📊 **گزارش آمار ربات**\n\n🎵 مجموع آهنگ‌ها: {total_songs}\n\n"
     for song_id, info in SONGS.items():
-        stats_text += f"• {info['title']}: `{info['downloads']}` بار دانلود\n"
+        stats_text += f"• {info['title']}: 📥 `{info['downloads']}` دانلود\n"
     
     await update.message.reply_text(stats_text, parse_mode="Markdown")
 
