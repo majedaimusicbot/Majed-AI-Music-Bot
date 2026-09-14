@@ -63,9 +63,9 @@ except ValueError:
     )
 
 
-# ---------------------------------------------------------
-# YouTube
-# ---------------------------------------------------------
+# =========================================================
+# YOUTUBE CONFIG
+# =========================================================
 
 YOUTUBE_URL = (
     "https://www.youtube.com/"
@@ -73,16 +73,16 @@ YOUTUBE_URL = (
 )
 
 
-# ---------------------------------------------------------
-# Telegram Channel
-# ---------------------------------------------------------
+# =========================================================
+# TELEGRAM CHANNEL
+# =========================================================
 
 TELEGRAM_CHANNEL = "@majedaimusic"
 
 
-# ---------------------------------------------------------
-# Database
-# ---------------------------------------------------------
+# =========================================================
+# DATABASE
+# =========================================================
 
 DB_FILE = "songs_db.json"
 
@@ -97,7 +97,7 @@ app = Flask(__name__)
 
 
 # =========================================================
-# DATABASE
+# DATABASE FUNCTIONS
 # =========================================================
 
 def load_songs():
@@ -184,10 +184,11 @@ telegram_app = (
 
 
 # =========================================================
-# HELPERS
+# STATISTICS HELPERS
 # =========================================================
 
 def get_total_downloads():
+
     global SONGS
 
     SONGS = load_songs()
@@ -197,32 +198,96 @@ def get_total_downloads():
     for info in SONGS.values():
 
         try:
+
             total += int(
                 info.get(
                     "downloads",
                     0,
                 )
             )
+
         except Exception:
             pass
 
     return total
 
 
-def main_menu():
-    """
-    Main user menu.
-    """
+def get_total_songs():
 
-    total_songs = len(load_songs())
+    global SONGS
+
+    SONGS = load_songs()
+
+    return len(SONGS)
+
+
+# =========================================================
+# YOUTUBE SUPPORT MENU
+# =========================================================
+
+def youtube_support_menu():
+
+    return InlineKeyboardMarkup([
+
+        [
+            InlineKeyboardButton(
+                "🔴 سابسکرایب در یوتیوب ❤️",
+                url=YOUTUBE_URL,
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "✅ سابسکرایب کردم — ادامه",
+                callback_data="youtube_confirm",
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "🔙 منوی اصلی",
+                callback_data="main_menu",
+            )
+        ],
+
+    ])
+
+
+def youtube_support_text():
+
+    return (
+        "❤️ حمایت از Majed AI Music\n\n"
+
+        "اگر از آهنگ‌ها و موسیقی‌های ما خوشت میاد، "
+        "با یک سابسکرایب ساده در یوتیوب از ما حمایت کن. 🎧\n\n"
+
+        "🔥 حمایت شما باعث میشه با انگیزه بیشتری "
+        "آهنگ‌های جدید فارسی تولید کنیم.\n\n"
+
+        "🎵 موزیک‌های جدید\n"
+        "🎧 تولید محتوای بیشتر\n"
+        "❤️ حمایت مستقیم از ما\n\n"
+
+        "👇 ابتدا روی دکمه زیر بزن و کانال ما را Subscribe کن.\n"
+        "بعد به ربات برگرد و روی «سابسکرایب کردم — ادامه» بزن."
+    )
+
+
+# =========================================================
+# MAIN MENU
+# =========================================================
+
+def main_menu():
+
+    total_songs = get_total_songs()
     total_downloads = get_total_downloads()
 
     return InlineKeyboardMarkup([
 
         [
             InlineKeyboardButton(
-                "❤️ عضویت در یوتیوب",
-                url=YOUTUBE_URL,
+                "🔴 حمایت از ما در یوتیوب ❤️",
+                callback_data="youtube_support",
             )
         ],
 
@@ -238,6 +303,7 @@ def main_menu():
                 "🔥 جدیدترین‌ها",
                 callback_data="latest_songs",
             ),
+
             InlineKeyboardButton(
                 "🔎 جستجوی آهنگ",
                 callback_data="search_start",
@@ -249,6 +315,7 @@ def main_menu():
                 f"🎧 {total_songs} آهنگ",
                 callback_data="archive_0",
             ),
+
             InlineKeyboardButton(
                 f"📥 {total_downloads} دانلود",
                 callback_data="noop",
@@ -259,20 +326,32 @@ def main_menu():
 
 
 def main_menu_text():
-    total_songs = len(load_songs())
+
+    total_songs = get_total_songs()
     total_downloads = get_total_downloads()
 
     return (
         "✨ به Majed AI Music خوش آمدید\n\n"
+
         "🎧 آرشیو اختصاصی موسیقی\n"
         "🎵 جدیدترین آهنگ‌ها و موزیک‌های ما\n\n"
+
         f"🎼 تعداد آهنگ‌ها: {total_songs}\n"
         f"📥 مجموع دانلودها: {total_downloads}\n\n"
-        "برای دریافت آهنگ موردنظر، یکی از گزینه‌های زیر را انتخاب کنید ❤️"
+
+        "❤️ اگر دوست داری از ما حمایت کنی، "
+        "روی «حمایت از ما در یوتیوب» بزن.\n\n"
+
+        "👇 برای دریافت آهنگ موردنظر یکی از گزینه‌ها را انتخاب کن."
     )
 
 
+# =========================================================
+# ADMIN MENU
+# =========================================================
+
 def admin_menu():
+
     return InlineKeyboardMarkup([
 
         [
@@ -287,6 +366,7 @@ def admin_menu():
                 "📊 آمار ربات",
                 callback_data="admin_stats",
             ),
+
             InlineKeyboardButton(
                 "🎵 لیست آهنگ‌ها",
                 callback_data="admin_songs",
@@ -330,12 +410,14 @@ def archive_menu(page=0):
             "📂 آرشیو آهنگ‌ها در حال حاضر خالی است.",
 
             InlineKeyboardMarkup([
+
                 [
                     InlineKeyboardButton(
                         "🔙 منوی اصلی",
                         callback_data="main_menu",
                     )
                 ]
+
             ]),
         )
 
@@ -344,7 +426,10 @@ def archive_menu(page=0):
 
     page = max(
         0,
-        min(page, max_page),
+        min(
+            page,
+            max_page,
+        ),
     )
 
 
@@ -352,7 +437,6 @@ def archive_menu(page=0):
     end = start + PAGE_SIZE
 
     page_items = items[start:end]
-
 
     keyboard = []
 
@@ -431,7 +515,6 @@ def archive_menu(page=0):
         "🎵 آرشیو آهنگ‌های Majed AI Music\n\n"
 
         f"🎧 تعداد کل آهنگ‌ها: {total}\n"
-
         f"📄 صفحه {page + 1} از {max_page + 1}\n\n"
 
         "👇 آهنگ موردنظر را انتخاب کنید:"
@@ -465,7 +548,7 @@ async def start(
 
 
 # =========================================================
-# ADMIN PANEL
+# ADMIN
 # =========================================================
 
 async def admin_command(
@@ -487,8 +570,10 @@ async def admin_command(
     context.user_data["waiting_for_search"] = False
 
     await update.message.reply_text(
+
         "🛠 پنل مدیریت Majed AI Music\n\n"
         "از گزینه‌های زیر استفاده کنید:",
+
         reply_markup=admin_menu(),
     )
 
@@ -504,7 +589,6 @@ async def add_song_command(
 
     if not update.effective_user:
         return
-
 
     if update.effective_user.id != ADMIN_ID:
 
@@ -534,16 +618,21 @@ async def add_song_command(
         return
 
 
-    title = "🎵 " + " ".join(context.args)
+    title = "🎵 " + " ".join(
+        context.args
+    )
 
 
-    context.user_data["pending_title"] = title
+    context.user_data[
+        "pending_title"
+    ] = title
 
 
     await update.message.reply_text(
 
         f"✅ عنوان ثبت شد:\n\n"
         f"{title}\n\n"
+
         "🎧 حالا فایل صوتی آهنگ را ارسال کنید."
 
     )
@@ -561,6 +650,7 @@ async def cancel_command(
     if not update.effective_user:
         return
 
+
     context.user_data.pop(
         "pending_title",
         None,
@@ -575,6 +665,7 @@ async def cancel_command(
         "waiting_for_delete",
         None,
     )
+
 
     await update.message.reply_text(
         "✅ عملیات لغو شد."
@@ -650,7 +741,8 @@ async def delete_song_command(
 
     await update.message.reply_text(
 
-        f"🗑 آهنگ با موفقیت حذف شد.\n\n"
+        "🗑 آهنگ با موفقیت حذف شد.\n\n"
+
         f"🎵 {title}\n"
         f"🆔 {song_id}"
 
@@ -992,7 +1084,6 @@ async def handle_message(
 
     msg = update.message
 
-
     file_id = None
 
 
@@ -1061,7 +1152,6 @@ async def handle_message(
         "🎉 آهنگ با موفقیت اضافه شد!\n\n"
 
         f"🎵 {title}\n"
-
         f"🆔 شناسه: {song_id}\n\n"
 
         "✅ آهنگ اکنون داخل آرشیو قرار گرفت."
@@ -1096,7 +1186,6 @@ async def button(
 
     data = query.data
 
-
     user_id = query.from_user.id
 
 
@@ -1105,6 +1194,95 @@ async def button(
     # =====================================================
 
     if data == "noop":
+        return
+
+
+    # =====================================================
+    # YOUTUBE SUPPORT
+    # =====================================================
+
+    if data == "youtube_support":
+
+        context.user_data[
+            "waiting_for_search"
+        ] = False
+
+
+        await query.message.edit_text(
+
+            youtube_support_text(),
+
+            reply_markup=youtube_support_menu(),
+
+        )
+
+        return
+
+
+    # =====================================================
+    # YOUTUBE CONFIRM
+    # =====================================================
+
+    if data == "youtube_confirm":
+
+        # -------------------------------------------------
+        # HONOR SYSTEM
+        #
+        # Telegram/YouTube do not actually verify
+        # the subscription in this version.
+        # -------------------------------------------------
+
+        context.user_data[
+            "youtube_confirmed"
+        ] = True
+
+
+        keyboard = InlineKeyboardMarkup([
+
+            [
+
+                InlineKeyboardButton(
+                    "🎵 ورود به آرشیو آهنگ‌ها",
+                    callback_data="archive_0",
+                )
+
+            ],
+
+            [
+
+                InlineKeyboardButton(
+                    "🔥 جدیدترین‌ها",
+                    callback_data="latest_songs",
+                )
+
+            ],
+
+            [
+
+                InlineKeyboardButton(
+                    "🏠 منوی اصلی",
+                    callback_data="main_menu",
+                )
+
+            ],
+
+        ])
+
+
+        await query.message.edit_text(
+
+            "🎉 ممنون از حمایتت ❤️\n\n"
+
+            "عضویت شما تأیید شد و دسترسی دریافت آهنگ‌ها "
+            "برای شما فعال شد. 🎧\n\n"
+
+            "حالا می‌تونی وارد آرشیو بشی و آهنگ موردنظرت "
+            "رو دریافت کنی. 🔥",
+
+            reply_markup=keyboard,
+
+        )
+
         return
 
 
@@ -1159,11 +1337,8 @@ async def button(
                 [
 
                     InlineKeyboardButton(
-
                         "🔙 پنل مدیریت",
-
                         callback_data="admin_menu",
-
                     )
 
                 ]
@@ -1188,6 +1363,7 @@ async def button(
         await query.message.edit_text(
 
             "🛠 پنل مدیریت Majed AI Music\n\n"
+
             "مدیریت آهنگ‌ها و مشاهده آمار:",
 
             reply_markup=admin_menu(),
@@ -1271,11 +1447,8 @@ async def button(
                 [
 
                     InlineKeyboardButton(
-
                         "🔄 بروزرسانی",
-
                         callback_data="admin_stats",
-
                     )
 
                 ],
@@ -1283,11 +1456,8 @@ async def button(
                 [
 
                     InlineKeyboardButton(
-
                         "🔙 پنل مدیریت",
-
                         callback_data="admin_menu",
-
                     )
 
                 ],
@@ -1314,16 +1484,16 @@ async def button(
 
         if not SONGS:
 
-            text = "📂 هنوز هیچ آهنگی در آرشیو وجود ندارد."
+            text = (
+                "📂 هنوز هیچ آهنگی در آرشیو وجود ندارد."
+            )
 
         else:
 
             lines = [
 
                 "🎵 لیست آهنگ‌های ثبت‌شده:",
-
                 "",
-
             ]
 
 
@@ -1362,11 +1532,8 @@ async def button(
                 [
 
                     InlineKeyboardButton(
-
                         "🔙 پنل مدیریت",
-
                         callback_data="admin_menu",
-
                     )
 
                 ]
@@ -1420,11 +1587,8 @@ async def button(
                 [
 
                     InlineKeyboardButton(
-
                         "🔙 پنل مدیریت",
-
                         callback_data="admin_menu",
-
                     )
 
                 ]
@@ -1471,7 +1635,7 @@ async def button(
 
 
     # =====================================================
-    # SEARCH START
+    # SEARCH
     # =====================================================
 
     if data == "search_start":
@@ -1493,11 +1657,8 @@ async def button(
                 [
 
                     InlineKeyboardButton(
-
                         "🔙 منوی اصلی",
-
                         callback_data="main_menu",
-
                     )
 
                 ]
@@ -1551,11 +1712,8 @@ async def button(
         keyboard.append([
 
             InlineKeyboardButton(
-
                 "🔙 منوی اصلی",
-
                 callback_data="main_menu",
-
             )
 
         ])
@@ -1614,11 +1772,8 @@ async def button(
                     [
 
                         InlineKeyboardButton(
-
                             "🔙 منوی اصلی",
-
                             callback_data="main_menu",
-
                         )
 
                     ]
@@ -1634,7 +1789,7 @@ async def button(
 
 
         # -------------------------------------------------
-        # USER ALREADY CONFIRMED
+        # ALREADY CONFIRMED
         # -------------------------------------------------
 
         if context.user_data.get(
@@ -1646,13 +1801,10 @@ async def button(
                 [
 
                     InlineKeyboardButton(
-
                         "⬇️ دانلود آهنگ",
-
                         callback_data=(
                             f"download_{song_id}"
                         ),
-
                     )
 
                 ],
@@ -1660,11 +1812,17 @@ async def button(
                 [
 
                     InlineKeyboardButton(
+                        "🔴 حمایت دوباره در یوتیوب ❤️",
+                        callback_data="youtube_support",
+                    )
 
+                ],
+
+                [
+
+                    InlineKeyboardButton(
                         "🔙 آرشیو آهنگ‌ها",
-
                         callback_data="archive_0",
-
                     )
 
                 ],
@@ -1676,7 +1834,7 @@ async def button(
 
                 f"🎵 {song['title']}\n\n"
 
-                "✅ عضویت شما قبلاً تأیید شده است.\n\n"
+                "✅ دسترسی شما فعال است.\n\n"
 
                 "برای دریافت فایل روی دکمه دانلود بزنید.",
 
@@ -1696,11 +1854,8 @@ async def button(
                 [
 
                     InlineKeyboardButton(
-
-                        "❤️ عضویت در یوتیوب",
-
+                        "🔴 سابسکرایب در یوتیوب ❤️",
                         url=YOUTUBE_URL,
-
                     )
 
                 ],
@@ -1708,13 +1863,8 @@ async def button(
                 [
 
                     InlineKeyboardButton(
-
-                        "✅ سابسکرایب کردم",
-
-                        callback_data=(
-                            f"verify_{song_id}"
-                        ),
-
+                        "✅ سابسکرایب کردم — ادامه",
+                        callback_data="youtube_confirm",
                     )
 
                 ],
@@ -1722,11 +1872,8 @@ async def button(
                 [
 
                     InlineKeyboardButton(
-
                         "🔙 آرشیو",
-
                         callback_data="archive_0",
-
                     )
 
                 ],
@@ -1736,93 +1883,20 @@ async def button(
 
             await query.message.edit_text(
 
-                f"🔐 تأیید عضویت\n\n"
+                "❤️ یک حمایت کوچک برای ادامه\n\n"
 
                 f"🎵 آهنگ: {song['title']}\n\n"
 
-                "ابتدا در یوتیوب عضو شوید و سپس "
-                "روی «سابسکرایب کردم» بزنید.",
+                "اگر از موسیقی‌های ما خوشت میاد، "
+                "لطفاً قبل از دریافت آهنگ در یوتیوب "
+                "کانال ما را Subscribe کن. 🎧\n\n"
+
+                "بعد از Subscribe به ربات برگرد و "
+                "روی «سابسکرایب کردم — ادامه» بزن.",
 
                 reply_markup=keyboard,
 
             )
-
-
-        return
-
-
-    # =====================================================
-    # VERIFY
-    # =====================================================
-
-    if data.startswith("verify_"):
-
-        song_id = data.split(
-            "_",
-            1,
-        )[1]
-
-
-        if song_id not in SONGS:
-
-            await query.message.edit_text(
-                "❌ آهنگ پیدا نشد."
-            )
-
-            return
-
-
-        # -------------------------------------------------
-        # HONOR SYSTEM
-        #
-        # YouTube subscription is NOT actually verified.
-        # -------------------------------------------------
-
-        context.user_data[
-            "youtube_confirmed"
-        ] = True
-
-
-        keyboard = InlineKeyboardMarkup([
-
-            [
-
-                InlineKeyboardButton(
-
-                    "⬇️ دانلود آهنگ",
-
-                    callback_data=(
-                        f"download_{song_id}"
-                    ),
-
-                )
-
-            ],
-
-            [
-
-                InlineKeyboardButton(
-
-                    "🎵 آرشیو آهنگ‌ها",
-
-                    callback_data="archive_0",
-
-                )
-
-            ],
-
-        ])
-
-
-        await query.message.edit_text(
-
-            "✅ عضویت تأیید شد\n\n"
-
-            "حالا می‌توانید آهنگ را دریافت کنید.",
-
-            reply_markup=keyboard,
-
-        )
 
         return
 
@@ -1845,19 +1919,18 @@ async def button(
 
             await query.message.edit_text(
 
-                "🔒 ابتدا باید عضویت یوتیوب "
-                "را تأیید کنید.",
+                "🔒 برای دریافت آهنگ ابتدا از ما در "
+                "یوتیوب حمایت کن. ❤️\n\n"
+
+                "بعد از Subscribe به ربات برگرد.",
 
                 reply_markup=InlineKeyboardMarkup([
 
                     [
 
                         InlineKeyboardButton(
-
-                            "❤️ عضویت در یوتیوب",
-
+                            "🔴 سابسکرایب در یوتیوب ❤️",
                             url=YOUTUBE_URL,
-
                         )
 
                     ],
@@ -1865,11 +1938,17 @@ async def button(
                     [
 
                         InlineKeyboardButton(
+                            "✅ سابسکرایب کردم — ادامه",
+                            callback_data="youtube_confirm",
+                        )
 
+                    ],
+
+                    [
+
+                        InlineKeyboardButton(
                             "🔙 آرشیو",
-
                             callback_data="archive_0",
-
                         )
 
                     ],
@@ -1932,9 +2011,9 @@ async def button(
         sent = False
 
 
-        # -------------------------------------------------
+        # =================================================
         # SEND AS AUDIO
-        # -------------------------------------------------
+        # =================================================
 
         try:
 
@@ -1958,9 +2037,9 @@ async def button(
             )
 
 
-        # -------------------------------------------------
+        # =================================================
         # FALLBACK DOCUMENT
-        # -------------------------------------------------
+        # =================================================
 
         if not sent:
 
@@ -1986,9 +2065,9 @@ async def button(
                 )
 
 
-        # -------------------------------------------------
+        # =================================================
         # SUCCESS
-        # -------------------------------------------------
+        # =================================================
 
         if sent:
 
@@ -2016,6 +2095,8 @@ async def button(
 
                     "🎧 آهنگ با موفقیت ارسال شد!\n\n"
 
+                    "❤️ ممنون که از Majed AI Music حمایت می‌کنی.\n\n"
+
                     "برای دریافت آهنگ‌های دیگر "
                     "از آرشیو استفاده کنید."
 
@@ -2026,11 +2107,8 @@ async def button(
                     [
 
                         InlineKeyboardButton(
-
                             "🎵 آرشیو آهنگ‌ها",
-
                             callback_data="archive_0",
-
                         )
 
                     ],
@@ -2038,11 +2116,17 @@ async def button(
                     [
 
                         InlineKeyboardButton(
+                            "🔴 حمایت از ما در یوتیوب ❤️",
+                            callback_data="youtube_support",
+                        )
 
+                    ],
+
+                    [
+
+                        InlineKeyboardButton(
                             "🏠 منوی اصلی",
-
                             callback_data="main_menu",
-
                         )
 
                     ],
@@ -2082,12 +2166,14 @@ telegram_app.add_handler(
     )
 )
 
+
 telegram_app.add_handler(
     CommandHandler(
         "admin",
         admin_command,
     )
 )
+
 
 telegram_app.add_handler(
     CommandHandler(
@@ -2096,12 +2182,14 @@ telegram_app.add_handler(
     )
 )
 
+
 telegram_app.add_handler(
     CommandHandler(
         "delete",
         delete_song_command,
     )
 )
+
 
 telegram_app.add_handler(
     CommandHandler(
@@ -2110,12 +2198,14 @@ telegram_app.add_handler(
     )
 )
 
+
 telegram_app.add_handler(
     CommandHandler(
         "stats",
         stats,
     )
 )
+
 
 telegram_app.add_handler(
     CommandHandler(
