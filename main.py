@@ -9,8 +9,8 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = "8836665873:AAE7yM9_qhV6xgAv5VfnU3LDm-twXP910Ak"
 YOUTUBE_URL = "https://www.youtube.com/@DeepHouse_Farsi?sub_confirmation=1"
 
-# می‌توانید فایلی که در تلگرام آپلود کرده‌اید را با file_id یا لینک مستقیم جایگزین کنید
-AUDIO_FILE_ID = "قرا دادن file_id موزیک یا لینک مستقیم فایل" 
+# اینجا فایل‌آیدی (file_id) موزیک خود را قرار دهید
+AUDIO_FILE_ID = "BAACAgQAAxkBAAE..." 
 
 app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
@@ -32,16 +32,15 @@ async def button(update: Update, context):
     
     if query.data == "get_song":
         await query.message.reply_text("از حمایت شما سپاسگزاریم! 🎉 در حال ارسال آهنگ...")
-        # ارسال فایل صوتی به کاربر
-        # اگر لینک مستقیم دارید از reply_audio با لینک استفاده کنید یا اگر فایل تلگرامی است file_id بدهید
         try:
             await context.bot.send_audio(
                 chat_id=query.message.chat_id,
-                audio="https://github.com/your-username/your-repo/raw/main/song.mp3", # یا لینک مستقیم فایل mp3
+                audio=AUDIO_FILE_ID,
                 caption="🎵 موزیک جدید شما از کانال Deep House Farsi"
             )
         except Exception as e:
-            await query.message.reply_text("خطا در ارسال فایل. لطفاً لینک مستقیم فایل صوتی را در کد قرار دهید.")
+            logging.error(f"Error sending audio: {e}")
+            await query.message.reply_text("خطا در ارسال فایل. لطفاً فایل‌آیدی را بررسی کنید.")
 
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CallbackQueryHandler(button))
