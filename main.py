@@ -101,9 +101,6 @@ app = Flask(__name__)
 # =========================================================
 
 def load_songs():
-    """
-    Load songs from songs_db.json.
-    """
 
     if not os.path.exists(DB_FILE):
         return {}
@@ -138,9 +135,6 @@ def load_songs():
 
 
 def save_songs(songs):
-    """
-    Safely save songs database.
-    """
 
     tmp_file = DB_FILE + ".tmp"
 
@@ -190,6 +184,15 @@ telegram_app = (
 # STATISTICS
 # =========================================================
 
+def get_total_songs():
+
+    global SONGS
+
+    SONGS = load_songs()
+
+    return len(SONGS)
+
+
 def get_total_downloads():
 
     global SONGS
@@ -209,19 +212,11 @@ def get_total_downloads():
                 )
             )
 
-        except Exception:
-            pass
+        except (TypeError, ValueError):
+
+            continue
 
     return total
-
-
-def get_total_songs():
-
-    global SONGS
-
-    SONGS = load_songs()
-
-    return len(SONGS)
 
 
 # =========================================================
@@ -235,10 +230,9 @@ def main_menu():
 
     return InlineKeyboardMarkup([
 
-        # مستقیم به یوتیوب
         [
             InlineKeyboardButton(
-                "🔴 حمایت از ما در یوتیوب ❤️",
+                "❤️ حمایت با Subscribe در یوتیوب 🔴",
                 url=YOUTUBE_URL,
             )
         ],
@@ -257,19 +251,19 @@ def main_menu():
             ),
 
             InlineKeyboardButton(
-                "🔎 جستجوی آهنگ",
+                "🔎 جستجوی آهنگ‌ها",
                 callback_data="search_start",
             ),
         ],
 
         [
             InlineKeyboardButton(
-                f"🎧 {total_songs} آهنگ",
+                f"🎧 آهنگ‌ها: {total_songs}",
                 callback_data="archive_0",
             ),
 
             InlineKeyboardButton(
-                f"📥 {total_downloads} دانلود",
+                f"📥 دانلودها: {total_downloads}",
                 callback_data="noop",
             ),
         ],
@@ -283,17 +277,20 @@ def main_menu_text():
     total_downloads = get_total_downloads()
 
     return (
+
         "✨ به Majed AI Music خوش آمدید\n\n"
 
         "🎧 آرشیو اختصاصی موسیقی\n"
         "🎵 جدیدترین آهنگ‌ها و موزیک‌های ما\n\n"
 
-        f"🎼 تعداد آهنگ‌ها: {total_songs}\n"
-        f"📥 مجموع دانلودها: {total_downloads}\n\n"
+        f"🎧 آهنگ‌ها: {total_songs}     "
+        f"📥 دانلودها: {total_downloads}\n\n"
 
-        "❤️ برای دریافت آهنگ، وارد آرشیو شوید.\n"
-        "اگر دوست داری از ما حمایت کنی، "
-        "می‌تونی کانال یوتیوب ما رو Subscribe کنی."
+        "برای دریافت آهنگ موردنظرت وارد آرشیو شو. ❤️\n\n"
+
+        "اگر موسیقی‌های ما رو دوست داری، "
+        "با یک Subscribe رایگان از ما حمایت کن. 🔴"
+
     )
 
 
@@ -301,21 +298,47 @@ def main_menu_text():
 # YOUTUBE SUBSCRIBE GATE
 # =========================================================
 
-def youtube_gate_keyboard(song_id):
+def youtube_gate_keyboard(
+    song_id,
+    warning=False,
+):
+
+    if warning:
+
+        subscribe_text = (
+            "🔴 دوباره Subscribe در یوتیوب ❤️"
+        )
+
+        confirm_text = (
+            "✅ انجام دادم — دوباره بررسی کن"
+        )
+
+    else:
+
+        subscribe_text = (
+            "🔴 Subscribe در یوتیوب ❤️"
+        )
+
+        confirm_text = (
+            "✅ انجام دادم — دریافت آهنگ"
+        )
+
 
     return InlineKeyboardMarkup([
 
         [
             InlineKeyboardButton(
-                "🔴 سابسکرایب در یوتیوب ❤️",
+                subscribe_text,
                 url=YOUTUBE_URL,
             )
         ],
 
         [
             InlineKeyboardButton(
-                "✅ سابسکرایب کردم — دریافت آهنگ",
-                callback_data=f"youtube_confirm_{song_id}",
+                confirm_text,
+                callback_data=(
+                    f"youtube_confirm_{song_id}"
+                ),
             )
         ],
 
@@ -332,61 +355,38 @@ def youtube_gate_keyboard(song_id):
 def youtube_gate_text(song):
 
     return (
-        "❤️ یک حمایت کوچک برای ادامه\n\n"
+
+        "❤️ یک حمایت کوچک برای دریافت آهنگ\n\n"
 
         f"🎵 {song['title']}\n\n"
 
-        "اگر از موسیقی‌های Majed AI Music خوشت میاد، "
-        "لطفاً با یک Subscribe در یوتیوب از ما حمایت کن. 🎧\n\n"
+        "اگر از موسیقی‌های ما خوشت میاد، "
+        "لطفاً با یک Subscribe رایگان "
+        "در یوتیوب از ما حمایت کن. 🎧\n\n"
 
-        "🔥 حمایت تو کمک می‌کنه موزیک‌های جدید بیشتری "
-        "تولید کنیم.\n\n"
+        "🔥 حمایت تو کمک می‌کنه آهنگ‌های "
+        "بیشتری تولید کنیم.\n\n"
 
-        "👇 اول روی دکمه قرمز بزن و در یوتیوب Subscribe کن.\n"
-        "بعد برگرد و روی «سابسکرایب کردم — دریافت آهنگ» بزن."
+        "👇 اول Subscribe کن، بعد برگرد "
+        "و روی «انجام دادم» بزن."
+
     )
-
-
-def youtube_warning_keyboard(song_id):
-
-    return InlineKeyboardMarkup([
-
-        [
-            InlineKeyboardButton(
-                "🔴 دوباره رفتن به یوتیوب ❤️",
-                url=YOUTUBE_URL,
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "✅ سابسکرایب کردم — دریافت آهنگ",
-                callback_data=f"youtube_confirm_{song_id}",
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "🔙 انتخاب آهنگ دیگر",
-                callback_data="archive_0",
-            )
-        ],
-
-    ])
 
 
 def youtube_warning_text(song):
 
     return (
-        "⚠️ هنوز یک مرحله باقی مانده!\n\n"
 
-        f"🎵 آهنگ: {song['title']}\n\n"
+        "⚠️ هنوز یک مرحله باقی مانده\n\n"
 
-        "برای دریافت این آهنگ، لطفاً ابتدا در یوتیوب "
-        "کانال Majed AI Music را Subscribe کن ❤️\n\n"
+        f"🎵 {song['title']}\n\n"
 
-        "اگر هنوز Subscribe نکردی، روی دکمه زیر بزن.\n"
-        "بعد دوباره «سابسکرایب کردم — دریافت آهنگ» را بزن."
+        "اگر هنوز در یوتیوب Subscribe نکردی، "
+        "لطفاً اول این کار رو انجام بده. ❤️\n\n"
+
+        "بعد دوباره روی دکمه "
+        "«انجام دادم» بزن تا ادامه بدی."
+
     )
 
 
@@ -444,27 +444,38 @@ def archive_menu(page=0):
 
     SONGS = load_songs()
 
-    items = list(SONGS.items())
+    items = list(
+        SONGS.items()
+    )
 
     total = len(items)
+
 
     if total == 0:
 
         return (
+
             "📂 آرشیو آهنگ‌ها در حال حاضر خالی است.",
 
             InlineKeyboardMarkup([
+
                 [
                     InlineKeyboardButton(
                         "🔙 منوی اصلی",
                         callback_data="main_menu",
                     )
                 ]
+
             ]),
+
         )
 
 
-    max_page = (total - 1) // PAGE_SIZE
+    max_page = (
+        (total - 1)
+        // PAGE_SIZE
+    )
+
 
     page = max(
         0,
@@ -475,15 +486,21 @@ def archive_menu(page=0):
     )
 
 
-    start = page * PAGE_SIZE
-    end = start + PAGE_SIZE
+    start = (
+        page
+        * PAGE_SIZE
+    )
 
-    page_items = items[start:end]
+    end = (
+        start
+        + PAGE_SIZE
+    )
+
 
     keyboard = []
 
 
-    for song_id, info in page_items:
+    for song_id, info in items[start:end]:
 
         title = str(
             info.get(
@@ -491,6 +508,7 @@ def archive_menu(page=0):
                 "آهنگ بدون نام",
             )
         )
+
 
         keyboard.append([
 
@@ -511,7 +529,9 @@ def archive_menu(page=0):
 
             InlineKeyboardButton(
                 "⬅️ قبلی",
-                callback_data=f"archive_{page - 1}",
+                callback_data=(
+                    f"archive_{page - 1}"
+                ),
             )
 
         )
@@ -533,13 +553,17 @@ def archive_menu(page=0):
 
             InlineKeyboardButton(
                 "بعدی ➡️",
-                callback_data=f"archive_{page + 1}",
+                callback_data=(
+                    f"archive_{page + 1}"
+                ),
             )
 
         )
 
 
-    keyboard.append(navigation)
+    keyboard.append(
+        navigation
+    )
 
 
     keyboard.append([
@@ -556,16 +580,21 @@ def archive_menu(page=0):
 
         "🎵 آرشیو آهنگ‌های Majed AI Music\n\n"
 
-        f"🎧 تعداد کل آهنگ‌ها: {total}\n"
-        f"📄 صفحه {page + 1} از {max_page + 1}\n\n"
+        f"🎧 آهنگ‌ها: {total}\n"
 
-        "👇 آهنگ موردنظر را انتخاب کنید:"
+        f"📄 صفحه {page + 1} از "
+        f"{max_page + 1}\n\n"
+
+        "👇 آهنگ موردنظرت رو انتخاب کن:"
+
     )
 
 
     return (
         text,
-        InlineKeyboardMarkup(keyboard),
+        InlineKeyboardMarkup(
+            keyboard
+        ),
     )
 
 
@@ -581,7 +610,11 @@ async def start(
     if not update.message:
         return
 
-    context.user_data["waiting_for_search"] = False
+
+    context.user_data[
+        "waiting_for_search"
+    ] = False
+
 
     await update.message.reply_text(
 
@@ -601,10 +634,17 @@ async def admin_command(
     context: ContextTypes.DEFAULT_TYPE,
 ):
 
-    if not update.effective_user:
+    if (
+        not update.effective_user
+        or not update.message
+    ):
         return
 
-    if update.effective_user.id != ADMIN_ID:
+
+    if (
+        update.effective_user.id
+        != ADMIN_ID
+    ):
 
         await update.message.reply_text(
             "⛔ شما دسترسی مدیریتی ندارید."
@@ -612,7 +652,11 @@ async def admin_command(
 
         return
 
-    context.user_data["waiting_for_search"] = False
+
+    context.user_data[
+        "waiting_for_search"
+    ] = False
+
 
     await update.message.reply_text(
 
@@ -633,10 +677,17 @@ async def add_song_command(
     context: ContextTypes.DEFAULT_TYPE,
 ):
 
-    if not update.effective_user:
+    if (
+        not update.effective_user
+        or not update.message
+    ):
         return
 
-    if update.effective_user.id != ADMIN_ID:
+
+    if (
+        update.effective_user.id
+        != ADMIN_ID
+    ):
 
         await update.message.reply_text(
             "⛔ شما دسترسی مدیریتی ندارید."
@@ -656,7 +707,6 @@ async def add_song_command(
             "سپس فایل صوتی آهنگ را ارسال کنید.\n\n"
 
             "مثال:\n"
-
             "/add بزن به سیم آخر"
 
         )
@@ -664,8 +714,11 @@ async def add_song_command(
         return
 
 
-    title = "🎵 " + " ".join(
-        context.args
+    title = (
+        "🎵 "
+        + " ".join(
+            context.args
+        )
     )
 
 
@@ -693,7 +746,7 @@ async def cancel_command(
     context: ContextTypes.DEFAULT_TYPE,
 ):
 
-    if not update.effective_user:
+    if not update.message:
         return
 
 
@@ -706,7 +759,6 @@ async def cancel_command(
         "waiting_for_search",
         None,
     )
-
 
     await update.message.reply_text(
         "✅ عملیات لغو شد."
@@ -722,11 +774,17 @@ async def delete_song_command(
     context: ContextTypes.DEFAULT_TYPE,
 ):
 
-    if not update.effective_user:
+    if (
+        not update.effective_user
+        or not update.message
+    ):
         return
 
 
-    if update.effective_user.id != ADMIN_ID:
+    if (
+        update.effective_user.id
+        != ADMIN_ID
+    ):
 
         await update.message.reply_text(
             "⛔ شما دسترسی مدیریتی ندارید."
@@ -744,7 +802,6 @@ async def delete_song_command(
             "/delete شناسه_آهنگ\n\n"
 
             "مثال:\n"
-
             "/delete 97ef3593"
 
         )
@@ -752,7 +809,10 @@ async def delete_song_command(
         return
 
 
-    song_id = context.args[0].strip()
+    song_id = (
+        context.args[0]
+        .strip()
+    )
 
 
     global SONGS
@@ -769,15 +829,21 @@ async def delete_song_command(
         return
 
 
-    title = SONGS[song_id].get(
+    title = SONGS[
+        song_id
+    ].get(
         "title",
         "بدون نام",
     )
 
 
-    del SONGS[song_id]
+    del SONGS[
+        song_id
+    ]
 
-    save_songs(SONGS)
+    save_songs(
+        SONGS
+    )
 
 
     await update.message.reply_text(
@@ -799,11 +865,17 @@ async def rename_song_command(
     context: ContextTypes.DEFAULT_TYPE,
 ):
 
-    if not update.effective_user:
+    if (
+        not update.effective_user
+        or not update.message
+    ):
         return
 
 
-    if update.effective_user.id != ADMIN_ID:
+    if (
+        update.effective_user.id
+        != ADMIN_ID
+    ):
 
         await update.message.reply_text(
             "⛔ شما دسترسی مدیریتی ندارید."
@@ -821,7 +893,6 @@ async def rename_song_command(
             "/rename شناسه نام جدید\n\n"
 
             "مثال:\n"
-
             "/rename 97ef3593 آهنگ جدید من"
 
         )
@@ -831,8 +902,12 @@ async def rename_song_command(
 
     song_id = context.args[0]
 
-    new_title = "🎵 " + " ".join(
-        context.args[1:]
+
+    new_title = (
+        "🎵 "
+        + " ".join(
+            context.args[1:]
+        )
     )
 
 
@@ -850,15 +925,24 @@ async def rename_song_command(
         return
 
 
-    old_title = SONGS[song_id].get(
+    old_title = SONGS[
+        song_id
+    ].get(
         "title",
         "بدون نام",
     )
 
 
-    SONGS[song_id]["title"] = new_title
+    SONGS[
+        song_id
+    ][
+        "title"
+    ] = new_title
 
-    save_songs(SONGS)
+
+    save_songs(
+        SONGS
+    )
 
 
     await update.message.reply_text(
@@ -881,11 +965,17 @@ async def stats(
     context: ContextTypes.DEFAULT_TYPE,
 ):
 
-    if not update.effective_user:
+    if (
+        not update.effective_user
+        or not update.message
+    ):
         return
 
 
-    if update.effective_user.id != ADMIN_ID:
+    if (
+        update.effective_user.id
+        != ADMIN_ID
+    ):
 
         await update.message.reply_text(
             "⛔ شما دسترسی مدیریتی ندارید."
@@ -899,9 +989,13 @@ async def stats(
     SONGS = load_songs()
 
 
-    total_songs = len(SONGS)
+    total_songs = len(
+        SONGS
+    )
 
-    total_downloads = get_total_downloads()
+    total_downloads = (
+        get_total_downloads()
+    )
 
 
     sorted_songs = sorted(
@@ -926,7 +1020,7 @@ async def stats(
 
         "",
 
-        f"🎵 تعداد آهنگ‌ها: {total_songs}",
+        f"🎧 تعداد آهنگ‌ها: {total_songs}",
 
         f"📥 مجموع دانلودها: {total_downloads}",
 
@@ -937,9 +1031,15 @@ async def stats(
     ]
 
 
-    for index, (song_id, info) in enumerate(
+    for index, (
+        _,
+        info
+    ) in enumerate(
+
         sorted_songs[:10],
+
         start=1,
+
     ):
 
         title = str(
@@ -948,6 +1048,7 @@ async def stats(
                 "بدون نام",
             )
         )
+
 
         downloads = int(
             info.get(
@@ -966,7 +1067,11 @@ async def stats(
 
 
     await update.message.reply_text(
-        "\n".join(lines)
+
+        "\n".join(
+            lines
+        )
+
     )
 
 
@@ -982,15 +1087,16 @@ async def handle_message(
     global SONGS
 
 
-    if not update.message:
+    if (
+        not update.message
+        or not update.effective_user
+    ):
         return
 
 
-    if not update.effective_user:
-        return
-
-
-    user_id = update.effective_user.id
+    user_id = (
+        update.effective_user.id
+    )
 
 
     # =====================================================
@@ -1009,7 +1115,8 @@ async def handle_message(
 
 
             query_text = (
-                update.message.text or ""
+                update.message.text
+                or ""
             ).strip()
 
 
@@ -1044,7 +1151,10 @@ async def handle_message(
                 ):
 
                     matched.append(
-                        (song_id, info)
+                        (
+                            song_id,
+                            info,
+                        )
                     )
 
 
@@ -1090,9 +1200,11 @@ async def handle_message(
                     f"🔎 نتیجه جستجو برای "
                     f"«{query_text}»\n\n"
 
-                    f"🎵 تعداد نتایج: {len(matched)}\n\n"
+                    f"🎵 تعداد نتایج: "
+                    f"{len(matched)}\n\n"
 
-                    "👇 آهنگ موردنظر را انتخاب کنید:"
+                    "👇 آهنگ موردنظرت رو انتخاب کن:"
+
                 )
 
             else:
@@ -1110,7 +1222,9 @@ async def handle_message(
                 text,
 
                 reply_markup=(
-                    InlineKeyboardMarkup(keyboard)
+                    InlineKeyboardMarkup(
+                        keyboard
+                    )
                 ),
 
             )
@@ -1130,15 +1244,21 @@ async def handle_message(
 
     if msg.audio:
 
-        file_id = msg.audio.file_id
+        file_id = (
+            msg.audio.file_id
+        )
 
     elif msg.voice:
 
-        file_id = msg.voice.file_id
+        file_id = (
+            msg.voice.file_id
+        )
 
     elif msg.document:
 
-        file_id = msg.document.file_id
+        file_id = (
+            msg.document.file_id
+        )
 
 
     if not file_id:
@@ -1185,7 +1305,9 @@ async def handle_message(
     }
 
 
-    save_songs(SONGS)
+    save_songs(
+        SONGS
+    )
 
 
     await msg.reply_text(
@@ -1193,6 +1315,7 @@ async def handle_message(
         "🎉 آهنگ با موفقیت اضافه شد!\n\n"
 
         f"🎵 {title}\n"
+
         f"🆔 شناسه: {song_id}\n\n"
 
         "✅ آهنگ اکنون داخل آرشیو قرار گرفت."
@@ -1224,9 +1347,14 @@ async def send_song(
         return
 
 
-    song = SONGS[song_id]
+    song = SONGS[
+        song_id
+    ]
 
-    file_id = song.get("file_id")
+
+    file_id = song.get(
+        "file_id"
+    )
 
 
     if not file_id:
@@ -1234,6 +1362,7 @@ async def send_song(
         await query.message.edit_text(
 
             "❌ فایل این آهنگ ثبت نشده است.\n\n"
+
             "لطفاً به ادمین اطلاع دهید."
 
         )
@@ -1241,12 +1370,15 @@ async def send_song(
         return
 
 
-    chat_id = query.message.chat_id
+    chat_id = (
+        query.message.chat_id
+    )
 
 
     await query.message.edit_text(
 
-        f"⏳ در حال ارسال {song['title']} ..."
+        f"⏳ در حال ارسال "
+        f"{song['title']} ..."
 
     )
 
@@ -1255,7 +1387,8 @@ async def send_song(
 
         f"🎵 {song['title']}\n\n"
 
-        f"🔗 کانال رسمی ما: {TELEGRAM_CHANNEL}"
+        f"🔗 کانال رسمی ما: "
+        f"{TELEGRAM_CHANNEL}"
 
     )
 
@@ -1323,10 +1456,16 @@ async def send_song(
 
     if sent:
 
-        SONGS[song_id]["downloads"] = (
+        SONGS[
+            song_id
+        ][
+            "downloads"
+        ] = (
 
             int(
-                SONGS[song_id].get(
+                SONGS[
+                    song_id
+                ].get(
                     "downloads",
                     0,
                 )
@@ -1336,7 +1475,9 @@ async def send_song(
         )
 
 
-        save_songs(SONGS)
+        save_songs(
+            SONGS
+        )
 
 
         await context.bot.send_message(
@@ -1348,37 +1489,31 @@ async def send_song(
                 "🎧 آهنگ با موفقیت ارسال شد! ❤️\n\n"
 
                 "برای دریافت آهنگ‌های دیگر "
-                "از آرشیو استفاده کنید."
+                "از آرشیو استفاده کن."
 
             ),
 
             reply_markup=InlineKeyboardMarkup([
 
                 [
-
                     InlineKeyboardButton(
                         "🎵 آرشیو آهنگ‌ها",
                         callback_data="archive_0",
                     )
-
                 ],
 
                 [
-
                     InlineKeyboardButton(
                         "🔥 جدیدترین‌ها",
                         callback_data="latest_songs",
                     )
-
                 ],
 
                 [
-
                     InlineKeyboardButton(
                         "🏠 منوی اصلی",
                         callback_data="main_menu",
                     )
-
                 ],
 
             ]),
@@ -1415,7 +1550,9 @@ async def button(
     global SONGS
 
 
-    query = update.callback_query
+    query = (
+        update.callback_query
+    )
 
 
     if not query:
@@ -1428,9 +1565,15 @@ async def button(
     SONGS = load_songs()
 
 
-    data = query.data
+    data = (
+        query.data
+        or ""
+    )
 
-    user_id = query.from_user.id
+
+    user_id = (
+        query.from_user.id
+    )
 
 
     # =====================================================
@@ -1477,11 +1620,11 @@ async def button(
 
             "➕ افزودن آهنگ\n\n"
 
-            "ابتدا این دستور را ارسال کنید:\n\n"
+            "ابتدا این دستور را ارسال کن:\n\n"
 
             "/add نام آهنگ\n\n"
 
-            "سپس فایل صوتی آهنگ را بفرستید.",
+            "سپس فایل صوتی آهنگ را بفرست.",
 
             reply_markup=InlineKeyboardMarkup([
 
@@ -1537,11 +1680,6 @@ async def button(
         SONGS = load_songs()
 
 
-        total_songs = len(SONGS)
-
-        total_downloads = get_total_downloads()
-
-
         top = sorted(
 
             SONGS.values(),
@@ -1564,9 +1702,11 @@ async def button(
 
             "",
 
-            f"🎵 تعداد آهنگ‌ها: {total_songs}",
+            f"🎧 تعداد آهنگ‌ها: "
+            f"{len(SONGS)}",
 
-            f"📥 مجموع دانلودها: {total_downloads}",
+            f"📥 مجموع دانلودها: "
+            f"{get_total_downloads()}",
 
             "",
 
@@ -1584,33 +1724,32 @@ async def button(
 
                 f"{index}. "
                 f"{info.get('title', 'بدون نام')} "
-                f"— {int(info.get('downloads', 0))}"
+                f"— "
+                f"{int(info.get('downloads', 0))}"
 
             )
 
 
         await query.message.edit_text(
 
-            "\n".join(lines),
+            "\n".join(
+                lines
+            ),
 
             reply_markup=InlineKeyboardMarkup([
 
                 [
-
                     InlineKeyboardButton(
                         "🔄 بروزرسانی",
                         callback_data="admin_stats",
                     )
-
                 ],
 
                 [
-
                     InlineKeyboardButton(
                         "🔙 پنل مدیریت",
                         callback_data="admin_menu",
                     )
-
                 ],
 
             ]),
@@ -1636,7 +1775,8 @@ async def button(
         if not SONGS:
 
             text = (
-                "📂 هنوز هیچ آهنگی در آرشیو وجود ندارد."
+                "📂 هنوز هیچ آهنگی "
+                "در آرشیو وجود ندارد."
             )
 
         else:
@@ -1644,7 +1784,9 @@ async def button(
             lines = [
 
                 "🎵 لیست آهنگ‌های ثبت‌شده:",
+
                 "",
+
             ]
 
 
@@ -1654,6 +1796,7 @@ async def button(
                     "title",
                     "بدون نام",
                 )
+
 
                 downloads = int(
                     info.get(
@@ -1666,12 +1809,16 @@ async def button(
                 lines.append(
 
                     f"🎵 {title}\n"
-                    f"🆔 {song_id} | 📥 {downloads}\n"
+
+                    f"🆔 {song_id} | "
+                    f"📥 {downloads}\n"
 
                 )
 
 
-            text = "\n".join(lines)
+            text = "\n".join(
+                lines
+            )
 
 
         await query.message.edit_text(
@@ -1712,7 +1859,7 @@ async def button(
 
             "➕ افزودن آهنگ:\n"
             "/add نام آهنگ\n"
-            "سپس فایل صوتی را ارسال کنید.\n\n"
+            "سپس فایل صوتی را ارسال کن.\n\n"
 
             "🗑 حذف آهنگ:\n"
             "/delete شناسه\n\n"
@@ -1771,7 +1918,9 @@ async def button(
             page = 0
 
 
-        text, markup = archive_menu(page)
+        text, markup = (
+            archive_menu(page)
+        )
 
 
         await query.message.edit_text(
@@ -1798,10 +1947,10 @@ async def button(
 
         await query.message.edit_text(
 
-            "🔎 جستجوی آهنگ\n\n"
+            "🔎 جستجوی آهنگ‌ها\n\n"
 
             "نام یا بخشی از نام آهنگ را "
-            "همینجا ارسال کنید:",
+            "همینجا ارسال کن:",
 
             reply_markup=InlineKeyboardMarkup([
 
@@ -1832,7 +1981,9 @@ async def button(
         )
 
 
-        latest = items[-10:][::-1]
+        latest = (
+            items[-10:][::-1]
+        )
 
 
         keyboard = []
@@ -1874,9 +2025,10 @@ async def button(
 
             text = (
 
-                "🔥 جدیدترین آهنگ‌های Majed AI Music\n\n"
+                "🔥 جدیدترین آهنگ‌های "
+                "Majed AI Music\n\n"
 
-                "👇 آهنگ موردنظر را انتخاب کنید:"
+                "👇 آهنگ موردنظرت رو انتخاب کن:"
 
             )
 
@@ -1916,7 +2068,8 @@ async def button(
 
             await query.message.edit_text(
 
-                "❌ این آهنگ دیگر در آرشیو موجود نیست.",
+                "❌ این آهنگ دیگر "
+                "در آرشیو موجود نیست.",
 
                 reply_markup=InlineKeyboardMarkup([
 
@@ -1936,11 +2089,13 @@ async def button(
             return
 
 
-        song = SONGS[song_id]
+        song = SONGS[
+            song_id
+        ]
 
 
         # =================================================
-        # USER ALREADY PASSED SUBSCRIBE GATE
+        # ALREADY PASSED GATE
         # =================================================
 
         if context.user_data.get(
@@ -1964,7 +2119,8 @@ async def button(
                 [
 
                     InlineKeyboardButton(
-                        "🔴 حمایت دوباره در یوتیوب ❤️",
+                        "🔴 حمایت دوباره "
+                        "در یوتیوب ❤️",
                         url=YOUTUBE_URL,
                     )
 
@@ -1988,7 +2144,7 @@ async def button(
 
                 "❤️ دسترسی دانلود شما فعال است.\n\n"
 
-                "برای دریافت فایل روی دانلود بزنید.",
+                "برای دریافت فایل روی دانلود بزن.",
 
                 reply_markup=keyboard,
 
@@ -2003,9 +2159,15 @@ async def button(
 
         await query.message.edit_text(
 
-            youtube_gate_text(song),
+            youtube_gate_text(
+                song
+            ),
 
-            reply_markup=youtube_gate_keyboard(song_id),
+            reply_markup=(
+                youtube_gate_keyboard(
+                    song_id
+                )
+            ),
 
         )
 
@@ -2016,7 +2178,9 @@ async def button(
     # YOUTUBE CONFIRM
     # =====================================================
 
-    if data.startswith("youtube_confirm_"):
+    if data.startswith(
+        "youtube_confirm_"
+    ):
 
         song_id = data.split(
             "_",
@@ -2033,12 +2197,10 @@ async def button(
             return
 
 
-        song = SONGS[song_id]
+        song = SONGS[
+            song_id
+        ]
 
-
-        # -------------------------------------------------
-        # Honor-system confirmation
-        # -------------------------------------------------
 
         attempts = int(
             context.user_data.get(
@@ -2049,7 +2211,7 @@ async def button(
 
 
         # =================================================
-        # FIRST CLICK
+        # FIRST CLICK → WARNING
         # =================================================
 
         if attempts == 0:
@@ -2061,11 +2223,14 @@ async def button(
 
             await query.message.edit_text(
 
-                youtube_warning_text(song),
+                youtube_warning_text(
+                    song
+                ),
 
                 reply_markup=(
-                    youtube_warning_keyboard(
-                        song_id
+                    youtube_gate_keyboard(
+                        song_id,
+                        warning=True,
                     )
                 ),
 
@@ -2075,8 +2240,11 @@ async def button(
 
 
         # =================================================
-        # SECOND CLICK
+        # SECOND CLICK → ACCESS
         # =================================================
+
+        # Honor System:
+        # YouTube subscription is NOT actually verified.
 
         context.user_data[
             "youtube_attempts"
@@ -2097,11 +2265,12 @@ async def button(
         )
 
 
-        # مستقیم آهنگ را ارسال کن
         await send_song(
+
             query,
             context,
             song_id,
+
         )
 
         return
@@ -2111,7 +2280,9 @@ async def button(
     # DOWNLOAD
     # =====================================================
 
-    if data.startswith("download_"):
+    if data.startswith(
+        "download_"
+    ):
 
         song_id = data.split(
             "_",
@@ -2133,12 +2304,16 @@ async def button(
                 return
 
 
-            song = SONGS[song_id]
+            song = SONGS[
+                song_id
+            ]
 
 
             await query.message.edit_text(
 
-                youtube_gate_text(song),
+                youtube_gate_text(
+                    song
+                ),
 
                 reply_markup=(
                     youtube_gate_keyboard(
@@ -2152,9 +2327,11 @@ async def button(
 
 
         await send_song(
+
             query,
             context,
             song_id,
+
         )
 
         return
@@ -2250,7 +2427,9 @@ telegram_app.add_handler(
 # BOT LOOP
 # =========================================================
 
-bot_loop = asyncio.new_event_loop()
+bot_loop = (
+    asyncio.new_event_loop()
+)
 
 bot_thread = None
 
@@ -2326,10 +2505,6 @@ def run_bot():
         )
 
         logger.info(
-            "Webhook is DISABLED"
-        )
-
-        logger.info(
             "========================================"
         )
 
@@ -2346,7 +2521,9 @@ def run_bot():
 
     except Exception as exc:
 
-        bot_start_error = repr(exc)
+        bot_start_error = repr(
+            exc
+        )
 
         logger.exception(
             "BOT START FAILED"
