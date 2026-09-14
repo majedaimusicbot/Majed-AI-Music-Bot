@@ -323,7 +323,8 @@ def init_bot_background():
         
         render_external_url = os.environ.get("RENDER_EXTERNAL_URL")
         if render_external_url:
-            webhook_url = f"{render_external_url}/{TOKEN}"
+            clean_url = render_external_url.strip().rstrip("/")
+            webhook_url = f"{clean_url}/{TOKEN}"
             await application.bot.set_webhook(webhook_url)
             logging.info(f"Webhook set to: {webhook_url}")
 
